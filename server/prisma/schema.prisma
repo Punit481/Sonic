@@ -1,0 +1,116 @@
+generator client {
+  provider = "prisma-client-js"
+  // output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String           @id @default(uuid())
+  clerkId   String?          @unique
+  email     String           @unique
+  name      String?
+  createdAt DateTime         @default(now())
+  sessions  WorkoutSession[]
+  metrics   BodyMetric[]
+  insights  UserInsight[]
+  toProcess String?
+  isPremium Boolean          @default(false)
+}
+
+model WorkoutSession {
+  id        String      @id @default(uuid())
+  user      User        @relation(fields: [userId], references: [id])
+  userId    String
+  date      DateTime
+  duration  Int?
+  note      String?
+  createdAt DateTime    @default(now())
+  exercises Exercise[]
+  insights  AIInsight[]
+  intensity Int?
+}
+
+model Exercise {
+  id        String           @id @default(uuid())
+  session   WorkoutSession   @relation(fields: [sessionId], references: [id])
+  sessionId String
+  name      String
+  category  ExerciseCategory
+  isCustom  Boolean          @default(false)
+  aiTagged  Boolean          @default(false)
+  sets      ExerciseSet[]
+}
+
+model ExerciseSet {
+  id         String     @id @default(uuid())
+  exercise   Exercise   @relation(fields: [exerciseId], references: [id])
+  exerciseId String
+  reps       Int?
+  weight     Float?
+  distance   Float?
+  duration   Float?
+  intensity  Intensity?
+  note       String?
+}
+
+model AIInsight {
+  id          String         @id @default(uuid())
+  session     WorkoutSession @relation(fields: [sessionId], references: [id])
+  sessionId   String
+  insightType InsightType
+  summary     String
+  detailJson  Json
+  createdAt   DateTime       @default(now())
+}
+
+model BodyMetric {
+  id         String   @id @default(uuid())
+  user       User     @relation(fields: [userId], references: [id])
+  userId     String
+  date       DateTime
+  weight     Float?
+  bodyFat    Float?
+  muscleMass Float?
+}
+
+model UserInsight {
+  id                 String   @id @default(uuid())
+  user               User     @relation(fields: [userId], references: [id])
+  userId             String
+  summary            String
+  achievements       Json
+  trends             Json
+  recommendations    Json
+  warnings           Json
+  nextSteps          Json
+  generatedAt        DateTime @default(now())
+  canRegenerateAfter DateTime
+
+  @@index([userId])
+}
+
+enum InsightType {
+  pr_detected
+  volume_spike
+  consistency
+  bodyweight_trend
+  other
+}
+
+enum ExerciseCategory {
+  strength
+  cardio
+  mobility
+  custom
+}
+
+enum Intensity {
+  easy
+  moderate
+  hard
+  max
+}
