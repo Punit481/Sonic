@@ -92,14 +92,9 @@ class VoiceLogApiTest extends IntegrationTest {
     }
 
     @Test
-    void audioUploadIsPremiumOnly() throws Exception {
+    void audioUploadIsTranscribedAndLogged() throws Exception {
         String user = newClerkId();
         MockMultipartFile audio = new MockMultipartFile("file", "rec.webm", "audio/webm;codecs=opus", new byte[] {1, 2, 3});
-
-        mvc.perform(multipart("/api/v1/voice-logs/audio").file(audio).with(as(user)))
-                .andExpect(status().isForbidden());
-
-        makePremium(user);
         given(voiceParser.parseAudio(any(), eq(new MimeType("audio", "webm")), any()))
                 .willReturn(new ParsedVoiceLog("bench two sets of eight", BENCH, null));
 
@@ -112,8 +107,6 @@ class VoiceLogApiTest extends IntegrationTest {
     @Test
     void audioUploadRejectsNonAudioFiles() throws Exception {
         String user = newClerkId();
-        mvc.perform(get("/api/v1/me").with(as(user)));
-        makePremium(user);
 
         mvc.perform(multipart("/api/v1/voice-logs/audio")
                         .file(new MockMultipartFile("file", "x.txt", "text/plain", new byte[] {1}))

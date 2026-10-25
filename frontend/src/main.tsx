@@ -1,15 +1,16 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter, Routes, Route } from "react-router";
-import "./index.css";
-import App from "./App.tsx";
-import Dashboard from "./pages/Dashboard.tsx";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router";
 import { ClerkProvider } from "@clerk/clerk-react";
-import ProtectedRoute from "./components/auth/ProtectedRoute.tsx";
-import SignInPage from "./components/auth/SignInPage.tsx";
-import SignUpPage from "./components/auth/SignUpPage.tsx";
-import { AuthWrapper } from "./components/auth/AuthWrapper.tsx";
-import Support from "./pages/Support.tsx";
+import "./index.css";
+import { clerkAppearance } from "./clerkAppearance";
+import AppLayout from "./components/AppLayout";
+import { SignInPage, SignUpPage } from "./pages/AuthPages";
+import HistoryPage from "./pages/HistoryPage";
+import InsightsPage from "./pages/InsightsPage";
+import Landing from "./pages/Landing";
+import LogPage from "./pages/LogPage";
+import OverviewPage from "./pages/OverviewPage";
 
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
@@ -22,25 +23,26 @@ createRoot(document.getElementById("root")!).render(
     <BrowserRouter>
       <ClerkProvider
         publishableKey={PUBLISHABLE_KEY}
-        afterSignInUrl="/dashboard"
-        afterSignUpUrl="/dashboard"
+        signInFallbackRedirectUrl="/app"
+        signUpFallbackRedirectUrl="/app"
+        afterSignOutUrl="/"
+        appearance={clerkAppearance}
       >
-        <AuthWrapper>
-          <Routes>
-            <Route index element={<App />} />
-            <Route
-              path="/dashboard"
-              element={
-                <ProtectedRoute>
-                  <Dashboard />
-                </ProtectedRoute>
-              }
-            />
-            <Route path="/support" element={<Support />} />
-            <Route path="/sign-in/*" element={<SignInPage />} />
-            <Route path="/sign-up/*" element={<SignUpPage />} />
-          </Routes>
-        </AuthWrapper>
+        <Routes>
+          <Route index element={<Landing />} />
+          <Route path="/sign-in/*" element={<SignInPage />} />
+          <Route path="/sign-up/*" element={<SignUpPage />} />
+          <Route path="/app" element={<AppLayout />}>
+            <Route index element={<OverviewPage />} />
+            <Route path="log" element={<LogPage />} />
+            <Route path="history" element={<HistoryPage />} />
+            <Route path="insights" element={<InsightsPage />} />
+          </Route>
+          {/* Old paths */}
+          <Route path="/dashboard" element={<Navigate to="/app" replace />} />
+          <Route path="/support" element={<Navigate to="/#faq" replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </ClerkProvider>
     </BrowserRouter>
   </StrictMode>
