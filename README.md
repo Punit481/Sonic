@@ -23,152 +23,122 @@ View every metric and receive smart AI suggestions to improve your training.
 
 ---
 
-### The Tech Behind the Magic
-
-### Frontend (React + TypeScript)
+## Architecture
 
 ```
-client/
-├── src/
-│   ├── components/          # Reusable UI components
-│   │   ├── InteractiveContinuousChart.tsx  # Flexible charting component
-│   │   ├── SideBar.tsx      # Voice input interface
-│   │   └── MainDash.tsx     # Dashboard overview
-│   ├── hooks/               # Custom React hooks
-│   │   ├── useAuthSync.tsx  # Authentication state management
-│   │   ├── useGenericChart.ts # Chart data processing
-│   │   └── useSummary.ts    # Fitness metrics calculations
-│   ├── stores/              # Zustand state management
-│   │   ├── userStore.ts     # Global user state
-│   │   └── types.ts         # TypeScript definitions
-│   ├── lib/                 # Utility functions
-│   │   ├── charts.ts        # Chart data transformations
-│   │   └── summary.ts       # Fitness calculations
-│   └── pages/               # Route components
+frontend/  React + TypeScript (Vite)  ──HTTPS + Clerk JWT──▶  backend/  Spring Boot (Java 25)
+                                                                 │
+                                                  ┌──────────────┼───────────────┐
+                                                  ▼              ▼               ▼
+                                             PostgreSQL     Google Gemini     Clerk JWKS
+                                           (JDBC + Flyway)  (Spring AI)    (token checks)
 ```
 
-### Backend (Node.js + Express + TypeScript)
+### Backend (`backend/`)
+
+Spring Boot 4 on Java 25, built with Maven. Code is grouped by feature:
 
 ```
-server/
-├── src/
-│   ├── controllers/         # Request handlers
-│   │   ├── voicelogController.ts # AI-powered voice processing
-│   │   ├── logsController.ts     # Workout CRUD operations
-│   │   └── metricsController.ts  # Body metrics management
-│   ├── middleware/          # Express middleware
-│   │   └── auth.ts          # Clerk authentication
-│   ├── routes/              # API route definitions
-│   │   ├── logs.ts
-│   │   ├── metrics.ts
-│   │   └── voicelog.ts
-│   ├── lib/                 # Utilities
-│   │   └── prisma.ts        # Database client
-│   └── prisma/              # Database schema and migrations
+backend/src/main/java/com/sonic/
+├── SonicApplication.java
+├── config/      SonicProperties (sonic.* settings), Clock and OpenAPI setup
+├── security/    Clerk JWT verification, user provisioning, CORS
+├── common/      Problem-detail errors, paging, per-user AI rate limiting
+├── user/        GET /api/v1/me
+├── workout/     Workouts, exercises and sets (JDBC repository, nested batch inserts)
+├── metric/      Body measurements
+├── draft/       Saved, not-yet-logged transcript
+├── voice/       Voice logging: Gemini turns text or audio into workouts and metrics
+└── insight/     Coaching insights: SQL aggregation + Gemini, with a 24h cooldown
+backend/src/main/resources/
+├── application.yml
+├── db/migration/V1__init.sql   Flyway schema
+└── prompts/                    Gemini prompt templates
 ```
+
+- **Data access:** plain SQL through Spring's `JdbcClient`, no ORM. Schema changes are Flyway migrations.
+- **Auth:** the frontend signs in with Clerk. The API verifies Clerk's JWT (signature, expiry, issuer and the `azp` origin) and creates the user row on their first request.
+- **AI:** Spring AI calls Gemini with a JSON schema generated from Java records, so responses come back as typed objects. The model's output is validated like any request body before it is saved.
+- **Errors:** every error is an [RFC 7807](https://www.rfc-editor.org/rfc/rfc7807) `application/problem+json` response with a stable `type`.
+
+### Frontend (`frontend/`)
+
+React 19, TypeScript, Vite, Tailwind, Zustand, Recharts and Clerk. All API calls live in `frontend/src/lib/api.ts`.
+
+## API
+
+Interactive docs run at `http://localhost:8080/swagger-ui` while the backend is running. Every endpoint except health and docs needs `Authorization: Bearer <Clerk session token>`.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/v1/me` | Current user, including `isPremium` |
+| GET | `/api/v1/workouts?page=1&size=20` | Workouts, newest first (size ≤ 100) |
+| POST | `/api/v1/workouts` | Log a workout |
+| GET / DELETE | `/api/v1/workouts/{id}` | One workout |
+| GET | `/api/v1/body-metrics?page=1&size=50` | Body measurements, newest first |
+| POST | `/api/v1/body-metrics` | Log a measurement |
+| DELETE | `/api/v1/body-metrics/{id}` | Delete a measurement |
+| GET / PUT / DELETE | `/api/v1/workout-draft` | The saved transcript |
+| POST | `/api/v1/voice-logs` | `{ transcript, timeZone }` → saved workout and/or measurement |
+| POST | `/api/v1/voice-logs/audio` | Premium. Multipart `file` (audio) → transcribed and saved in one call |
+| GET | `/api/v1/insights/latest` | Latest insights and whether new ones can be generated |
+| POST | `/api/v1/insights` | Generate insights (needs 3+ workouts, once per 24h) |
+| GET | `/actuator/health` | Health check (no auth) |
+
+Units: weights in kg, distances in km, durations in hours. Voice and insight endpoints are limited to 30 AI calls per user per hour by default.
 
 ## Getting Started
 
-**Ready to ditch the notepad? Let's get you set up.**
+### What you'll need
 
-### What You'll Need
+- Java 25 (any JDK 25 or newer; the Maven wrapper downloads Maven itself)
+- Node.js 20+ and npm
+- Docker, for the local Postgres database (or your own PostgreSQL 14+)
+- A [Clerk](https://clerk.com) application
+- A [Google AI Studio](https://aistudio.google.com) API key for Gemini
 
-- Node.js 18+ and npm (the basics)
-- A PostgreSQL database (where your gains live)
-- Clerk account (keeps things secure)
-- Google AI Studio account (powers the voice magic)
+### 1. Configure Clerk
 
-### Set It Up in 5 Minutes
+In the Clerk dashboard, open **Sessions → Customize session token** and add:
 
-1. **Grab the code**
+```json
+{
+  "email": "{{user.primary_email_address}}",
+  "name": "{{user.first_name}}"
+}
+```
 
-   ```bash
-   git clone <repository-url>
-   cd sonic
-   ```
+The API reads these claims when it creates a user. Without them it falls back to Clerk's Backend API, which needs `CLERK_SECRET_KEY` set on the backend.
 
-2. **Install the good stuff**
+### 2. Run the backend
 
-   ```bash
-   # Backend dependencies
-   cd server
-   npm install
+```bash
+cd backend
+cp .env.example .env      # then fill in CLERK_ISSUER and GEMINI_API_KEY
+./mvnw spring-boot:run
+```
 
-   # Frontend dependencies
-   cd ../client
-   npm install
-   ```
+`spring-boot:run` starts Postgres from `compose.yaml` automatically and Flyway creates the tables. The API listens on `http://localhost:8080`.
 
-3. **Add your secret keys**
+### 3. Run the frontend
 
-   **Server (.env)**
+```bash
+cd frontend
+cp .env.example .env      # set VITE_CLERK_PUBLISHABLE_KEY
+npm install
+npm run dev
+```
 
-   ```env
-   DATABASE_URL="postgresql://username:password@localhost:5432/sonic_db"
-   CLERK_PUBLISHABLE_KEY="pk_test_..."
-   CLERK_SECRET_KEY="sk_test_..."
-   GEMINI_API_KEY="your_gemini_api_key"
-   PORT=4000
-   ```
+Open `http://localhost:5173`.
 
-   **Client (.env)**
+## Deployment
 
-   ```env
-   VITE_CLERK_PUBLISHABLE_KEY="pk_test_..."
-   ```
+- **Backend:** `backend/Dockerfile` builds a container image. Run it on any container host (Render, Railway, Fly.io, a VPS) with the variables from `backend/.env.example`. Set `SONIC_ALLOWED_ORIGINS` to your frontend's URL and `LOG_FORMAT=ecs` for JSON logs.
+- **Frontend:** deploy `frontend/` to Vercel as before. If the Vercel project's root directory was `client`, change it to `frontend`. Set `VITE_BACKEND_URL` to the backend's URL.
 
-4. **Set up your database**
+## Testing
 
-   ```bash
-   cd server
-   npx prisma generate
-   npx prisma db push
-   ```
-
-5. **Fire it up!**
-
-   ```bash
-   # Start the backend (Terminal 1)
-   cd server
-   npm run dev
-
-   # Start the frontend (Terminal 2)
-   cd client
-   npm run dev
-   ```
-
-That's it! Open your browser and start talking to your workout tracker. 🎉
-
-### API Endpoints
-
-#### Authentication Required
-
-- `GET /api/logs` - Retrieve workout logs
-- `POST /api/logs` - Create workout log
-- `GET /api/metrics` - Retrieve body metrics
-- `POST /api/metrics` - Create body metric
-- `POST /api/voice-log` - Process voice input
-
-## 🛠️ What's Under the Hood
-
-**For the curious developers:**
-
-### Frontend Stack
-
-- **React 18** with TypeScript (modern & type-safe)
-- **Zustand** for state management (simple & powerful)
-- **Recharts** for beautiful visualizations
-- **Tailwind CSS** for clean styling
-- **Clerk React** for hassle-free auth
-- **React Speech Recognition** for voice magic
-
-### Backend Power
-
-- **Node.js** with Express and TypeScript
-- **Prisma** ORM with PostgreSQL (type-safe database ops)
-- **Clerk** authentication middleware
-- **Google Gemini AI** for understanding natural language
-- **CORS** enabled for seamless frontend-backend communication
+See [TESTING.md](TESTING.md).
 
 ## Want to Contribute?
 

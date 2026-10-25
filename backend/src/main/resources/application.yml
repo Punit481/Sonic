@@ -1,0 +1,71 @@
+spring:
+  application:
+    name: sonic-backend
+  config:
+    # Local secrets; see .env.example.
+    import: optional:file:.env[.properties]
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/sonic}
+    username: ${DATABASE_USERNAME:sonic}
+    password: ${DATABASE_PASSWORD:sonic}
+  flyway:
+    locations: classpath:db/migration
+  mvc:
+    problemdetails:
+      enabled: true
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Your Clerk Frontend API URL, e.g. https://your-app.clerk.accounts.dev
+          issuer-uri: ${CLERK_ISSUER}
+  ai:
+    google:
+      genai:
+        api-key: ${GEMINI_API_KEY}
+        chat:
+          model: ${GEMINI_MODEL:gemini-2.5-flash}
+          temperature: 0.2
+          thinking-budget: 0
+  docker:
+    compose:
+      lifecycle-management: start-only
+
+server:
+  port: ${PORT:8080}
+  shutdown: graceful
+
+sonic:
+  cors:
+    allowed-origins: ${SONIC_ALLOWED_ORIGINS:http://localhost:5173}
+  clerk:
+    # Only used when the session token has no email claim (see README).
+    secret-key: ${CLERK_SECRET_KEY:}
+  insights:
+    cooldown: 24h
+    min-sessions: 3
+    lookback: 90d
+  rate-limit:
+    ai-requests-per-hour: ${SONIC_AI_REQUESTS_PER_HOUR:30}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui
+
+logging:
+  structured:
+    format:
+      console: ${LOG_FORMAT:}
