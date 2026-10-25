@@ -1,5 +1,6 @@
 package com.sonic.insight;
 
+import com.sonic.common.AiRetry;
 import com.sonic.common.ApiException;
 import java.util.Locale;
 import java.util.stream.Collectors;
@@ -41,7 +42,7 @@ class GeminiInsightGenerator implements InsightGenerator {
                 .collect(Collectors.joining("\n"));
 
         try {
-            return chat.prompt()
+            return AiRetry.call("Gemini insight generation", () -> chat.prompt()
                     .user(user -> user.text(prompt)
                             .param("lookbackDays", s.lookbackDays())
                             .param("trainingPeriodDays", s.trainingPeriodDays())
@@ -58,7 +59,7 @@ class GeminiInsightGenerator implements InsightGenerator {
                             .param("lastTwoWeeks", s.lastTwoWeeks())
                             .param("bodyComposition", bodyComposition.isEmpty() ? "- No body metrics tracked" : bodyComposition))
                     .call()
-                    .entity(Insight.Content.class, spec -> spec.useProviderStructuredOutput());
+                    .entity(Insight.Content.class, spec -> spec.useProviderStructuredOutput()));
         } catch (RuntimeException ex) {
             log.warn("Gemini insight generation failed", ex);
             throw ApiException.aiUnavailable("Could not generate insights right now. Please try again.");

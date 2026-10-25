@@ -118,15 +118,36 @@ export const logVoiceText = (token: string | null | undefined, transcript: strin
     body: JSON.stringify({ transcript, timeZone: userTimeZone() }),
   });
 
-/** Premium: the server transcribes and parses the recording in one call. */
+const audioExtension = (type: string) =>
+  type.includes("mp4") ? "m4a" : type.includes("ogg") ? "ogg" : "webm";
+
+/** The server transcribes and parses the recording in one call. */
 export const logVoiceAudio = (token: string | null | undefined, audio: Blob) => {
   const form = new FormData();
-  form.append("file", audio, "recording.webm");
+  form.append("file", audio, `recording.${audioExtension(audio.type)}`);
   form.append("timeZone", userTimeZone());
   return request<VoiceLogResult>("/api/v1/voice-logs/audio", token, {
     method: "POST",
     body: form,
   });
+};
+
+export const deleteWorkout = (token: string | null | undefined, id: string) =>
+  request<void>(`/api/v1/workouts/${id}`, token, { method: "DELETE" });
+
+export const deleteBodyMetric = (token: string | null | undefined, id: string) =>
+  request<void>(`/api/v1/body-metrics/${id}`, token, { method: "DELETE" });
+
+/** A message fit to show the user, from an API problem or any other failure. */
+export const errorMessage = (error: unknown, fallback = "Something went wrong. Please try again.") => {
+  if (error instanceof ApiError) {
+    const suggestion = typeof error.problem.suggestion === "string" ? ` ${error.problem.suggestion}` : "";
+    return (error.problem.detail || error.problem.title || fallback) + suggestion;
+  }
+  if (error instanceof TypeError) {
+    return "Can't reach the Sonic server. Is the backend running?";
+  }
+  return fallback;
 };
 
 export const fetchInsights = (token?: string | null) =>

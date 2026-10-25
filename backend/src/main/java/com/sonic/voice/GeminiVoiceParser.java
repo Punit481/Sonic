@@ -1,5 +1,6 @@
 package com.sonic.voice;
 
+import com.sonic.common.AiRetry;
 import com.sonic.common.ApiException;
 import java.time.LocalDate;
 import java.util.function.Consumer;
@@ -45,10 +46,10 @@ class GeminiVoiceParser implements VoiceParser {
 
     private ParsedVoiceLog call(Consumer<ChatClient.PromptUserSpec> user) {
         try {
-            return chat.prompt()
+            return AiRetry.call("Gemini voice parsing", () -> chat.prompt()
                     .user(user)
                     .call()
-                    .entity(ParsedVoiceLog.class, spec -> spec.useProviderStructuredOutput());
+                    .entity(ParsedVoiceLog.class, spec -> spec.useProviderStructuredOutput()));
         } catch (RuntimeException ex) {
             log.warn("Gemini voice parsing failed", ex);
             throw ApiException.aiUnavailable("Could not process the voice log right now. Please try again.");

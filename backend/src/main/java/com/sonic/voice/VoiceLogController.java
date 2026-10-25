@@ -11,7 +11,6 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.util.MimeType;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -42,9 +41,11 @@ class VoiceLogController {
                 .body(voiceLogs.logText(user.id(), request.transcript().strip(), zone(request.timeZone())));
     }
 
-    /** Premium: the recording goes straight to Gemini, which transcribes and parses it in one call. */
+    /**
+     * The recording goes straight to Gemini, which transcribes and parses it in one call. The
+     * frontend uses this when the browser has no working speech recognition (Safari, Firefox, Brave).
+     */
     @PostMapping(path = "/audio", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasRole('PREMIUM')")
     ResponseEntity<VoiceLogResult> fromAudio(
             @AuthenticationPrincipal CurrentUser user,
             @RequestPart("file") MultipartFile file,

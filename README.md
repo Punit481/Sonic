@@ -80,7 +80,7 @@ Interactive docs run at `http://localhost:8080/swagger-ui` while the backend is 
 | DELETE | `/api/v1/body-metrics/{id}` | Delete a measurement |
 | GET / PUT / DELETE | `/api/v1/workout-draft` | The saved transcript |
 | POST | `/api/v1/voice-logs` | `{ transcript, timeZone }` → saved workout and/or measurement |
-| POST | `/api/v1/voice-logs/audio` | Premium. Multipart `file` (audio) → transcribed and saved in one call |
+| POST | `/api/v1/voice-logs/audio` | Multipart `file` (audio) → transcribed and saved in one call. Used when the browser has no speech recognition |
 | GET | `/api/v1/insights/latest` | Latest insights and whether new ones can be generated |
 | POST | `/api/v1/insights` | Generate insights (needs 3+ workouts, once per 24h) |
 | GET | `/actuator/health` | Health check (no auth) |

@@ -13,7 +13,7 @@ The integration tests start the whole application against a real PostgreSQL in D
 |---|---|
 | `workout/WorkoutApiTest` | Auth required, nested create with ordering, zero values kept, pagination, per-user isolation, validation errors, user provisioning |
 | `metric/BodyMetricAndDraftApiTest` | Body metric create/list and validation; draft save/replace/clear |
-| `voice/VoiceLogApiTest` | Text voice logs saving workouts and metrics, "not understood" responses, validating model output, past-date measurements, premium-only audio upload |
+| `voice/VoiceLogApiTest` | Text voice logs saving workouts and metrics, "not understood" responses, validating model output, past-date measurements, audio upload |
 | `voice/GeminiSchemaTest` | The JSON schema sent to Gemini keeps unsaid values optional, so the model can't be forced to invent them |
 | `insight/InsightApiTest` | 3-workout minimum, SQL aggregates (volume, cardio, top exercises, 90-day window, weight change), 24h cooldown with `Retry-After`, same-day sessions, rejecting incomplete model output |
 
