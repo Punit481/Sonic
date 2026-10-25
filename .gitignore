@@ -56,3 +56,5 @@ temp/
 # Misc
 .nyc_output
 .cache/
+# Java
+target/
