@@ -1,0 +1,16 @@
+# Local development database. `./mvnw spring-boot:run` starts it automatically
+# through spring-boot-docker-compose.
+services:
+  postgres:
+    image: 'postgres:17'
+    environment:
+      - 'POSTGRES_DB=sonic'
+      - 'POSTGRES_USER=sonic'
+      - 'POSTGRES_PASSWORD=sonic'
+    ports:
+      - '5432:5432'
+    volumes:
+      - sonic-pgdata:/var/lib/postgresql/data
+
+volumes:
+  sonic-pgdata:
