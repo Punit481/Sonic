@@ -134,4 +134,29 @@ class InsightApiTest extends IntegrationTest {
                 .andExpect(jsonPath("$.insights").doesNotExist())
                 .andExpect(jsonPath("$.canRegenerate").value(true));
     }
+
+    @Test
+    void acceptsImperfectButUsableModelOutput() throws Exception {
+        String user = newClerkId();
+        for (int i = 0; i < 3; i++) {
+            logWorkout(user, Instant.now().minusSeconds(60), "Pushups", "strength", "[{\"reps\": 20}]");
+        }
+        // Fewer achievements than asked for, a blank item, too many next steps, and a priority
+        // word outside the schema: all things a model does.
+        given(insightGenerator.generate(any())).willReturn(new Insight.Content(
+                " Solid start. ",
+                List.of("20 push-ups every session", " "),
+                null,
+                List.of(new Insight.Recommendation(Insight.Priority.from("Urgent"), "Add pulling work", "Balance")),
+                null,
+                List.of("1", "2", "3", "4", "5", "6", "7", "8")));
+
+        mvc.perform(post("/api/v1/insights").with(as(user)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.insights.summary").value("Solid start."))
+                .andExpect(jsonPath("$.insights.achievements.length()").value(1))
+                .andExpect(jsonPath("$.insights.recommendations[0].priority").value("high"))
+                .andExpect(jsonPath("$.insights.warnings.length()").value(0))
+                .andExpect(jsonPath("$.insights.nextSteps.length()").value(6));
+    }
 }

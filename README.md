@@ -30,8 +30,8 @@ frontend/  React + TypeScript (Vite)  ──HTTPS + Clerk JWT──▶  backend/
                                                                  │
                                                   ┌──────────────┼───────────────┐
                                                   ▼              ▼               ▼
-                                             PostgreSQL     Google Gemini     Clerk JWKS
-                                           (JDBC + Flyway)  (Spring AI)    (token checks)
+                                             PostgreSQL    Groq: gpt-oss +    Clerk JWKS
+                                           (JDBC + Flyway)  Whisper (Spring AI) (token checks)
 ```
 
 ### Backend (`backend/`)
@@ -48,17 +48,17 @@ backend/src/main/java/com/sonic/
 ├── workout/     Workouts, exercises and sets (JDBC repository, nested batch inserts)
 ├── metric/      Body measurements
 ├── draft/       Saved, not-yet-logged transcript
-├── voice/       Voice logging: Gemini turns text or audio into workouts and metrics
-└── insight/     Coaching insights: SQL aggregation + Gemini, with a 24h cooldown
+├── voice/       Voice logging: Whisper transcribes audio, gpt-oss turns text into workouts and metrics
+└── insight/     Coaching insights: SQL aggregation + gpt-oss, with a 24h cooldown
 backend/src/main/resources/
 ├── application.yml
 ├── db/migration/V1__init.sql   Flyway schema
-└── prompts/                    Gemini prompt templates
+└── prompts/                    Prompt templates
 ```
 
 - **Data access:** plain SQL through Spring's `JdbcClient`, no ORM. Schema changes are Flyway migrations.
 - **Auth:** the frontend signs in with Clerk. The API verifies Clerk's JWT (signature, expiry, issuer and the `azp` origin) and creates the user row on their first request.
-- **AI:** Spring AI calls Gemini with a JSON schema generated from Java records, so responses come back as typed objects. The model's output is validated like any request body before it is saved.
+- **AI:** [Groq](https://groq.com)'s free tier through Spring AI's OpenAI client (Groq's API is OpenAI-compatible). Whisper turns recordings into text; OpenAI's open-weight gpt-oss-120b turns text into workouts and writes insights, following a JSON schema generated from Java records. The model's output is validated like any request body before it is saved. Any OpenAI-compatible provider works by changing `spring.ai.openai.base-url` and the model names.
 - **Errors:** every error is an [RFC 7807](https://www.rfc-editor.org/rfc/rfc7807) `application/problem+json` response with a stable `type`.
 
 ### Frontend (`frontend/`)
@@ -95,7 +95,7 @@ Units: weights in kg, distances in km, durations in hours. Voice and insight end
 - Node.js 20+ and npm
 - Docker, for the local Postgres database (or your own PostgreSQL 14+)
 - A [Clerk](https://clerk.com) application
-- A [Google AI Studio](https://aistudio.google.com) API key for Gemini
+- A free [Groq](https://console.groq.com/keys) API key (no card needed)
 
 ### 1. Configure Clerk
 
@@ -114,7 +114,7 @@ The API reads these claims when it creates a user. Without them it falls back to
 
 ```bash
 cd backend
-cp .env.example .env      # then fill in CLERK_ISSUER and GEMINI_API_KEY
+cp .env.example .env      # then fill in CLERK_ISSUER and GROQ_API_KEY
 ./mvnw spring-boot:run
 ```
 

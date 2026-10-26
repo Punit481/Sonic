@@ -10,10 +10,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ai.converter.BeanOutputConverter;
 
 /**
- * Gemini must fill every field the schema marks required. If an optional field became
+ * The model must fill every field the schema marks required. If an optional field became
  * required, the model would invent values, e.g. a 0% body fat reading nobody said.
  */
-class GeminiSchemaTest {
+class AiSchemaTest {
 
     private static List<String> required(Class<?> type, String path) {
         String schema = new BeanOutputConverter<>(type).getJsonSchema();

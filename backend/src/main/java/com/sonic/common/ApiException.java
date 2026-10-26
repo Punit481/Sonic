@@ -67,6 +67,27 @@ public class ApiException extends ErrorResponseException {
         return new ApiException(HttpStatus.BAD_GATEWAY, "ai-unavailable", "The AI service failed", detail, Map.of());
     }
 
+    /** The AI provider refused the call because Sonic's usage limit is used up. */
+    public static ApiException aiQuotaExhausted() {
+        return new ApiException(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "ai-quota-exhausted",
+                "AI limit reached",
+                "Sonic has hit its AI usage limit for now, so this couldn't be processed. "
+                        + "Your text is still here; try again later.",
+                Map.of());
+    }
+
+    /** The AI provider rejected Sonic's API key, or none is configured. */
+    public static ApiException aiNotConfigured() {
+        return new ApiException(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "ai-not-configured",
+                "AI isn't set up",
+                "The AI service rejected Sonic's API key. Set GROQ_API_KEY in backend/.env and restart the backend.",
+                Map.of());
+    }
+
     public static ApiException badRequest(String detail) {
         return new ApiException(HttpStatus.BAD_REQUEST, "bad-request", "Bad request", detail, Map.of());
     }

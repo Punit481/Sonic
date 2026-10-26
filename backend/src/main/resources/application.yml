@@ -27,13 +27,33 @@ spring:
           # Your Clerk Frontend API URL, e.g. https://your-app.clerk.accounts.dev
           issuer-uri: ${CLERK_ISSUER}
   ai:
-    google:
-      genai:
-        api-key: ${GEMINI_API_KEY}
-        chat:
-          model: ${GEMINI_MODEL:gemini-3.8-flash}
-          temperature: 0.2
-          thinking-budget: 0
+    # Groq's free tier, through its OpenAI-compatible API: gpt-oss for text, Whisper for speech.
+    openai:
+      # Without a key the app still runs; AI requests fail with a clear error.
+      api-key: ${GROQ_API_KEY:missing}
+      base-url: https://api.groq.com/openai/v1
+      max-retries: 2
+      timeout: 60s
+      chat:
+        model: ${GROQ_CHAT_MODEL:openai/gpt-oss-120b}
+        temperature: 0.2
+        # A reasoning model: low effort keeps replies fast; the task is extraction, not puzzles.
+        reasoning-effort: low
+        # JSON mode: the reply is always valid JSON, which Spring AI maps onto the Java records.
+        response-format:
+          type: JSON_OBJECT
+      audio:
+        transcription:
+          model: ${GROQ_TRANSCRIPTION_MODEL:whisper-large-v3-turbo}
+          language: en
+          prompt: "Gym workout log: bench press, squats, deadlifts, sets, reps, kilos, pounds, km, minutes."
+    model:
+      # Only chat and speech-to-text are used.
+      embedding: none
+      image: none
+      moderation: none
+      audio:
+        speech: none
   docker:
     compose:
       lifecycle-management: start-only

@@ -86,6 +86,8 @@ export default function LogPage() {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [result, setResult] = useState<VoiceLogResult | null>(null);
+  // Kept after a failed upload so the user can retry without recording again.
+  const [failedRecording, setFailedRecording] = useState<Blob | null>(null);
   const restored = useRef(false);
   const textarea = useRef<HTMLTextAreaElement>(null);
 
@@ -112,21 +114,21 @@ export default function LogPage() {
     }
   };
 
-  const voice = useVoiceCapture({
-    text,
-    onText: setText,
-    onRecording: async (audio) => {
-      setBusy("transcribing");
-      setError(null);
-      try {
-        await finish(await logVoiceAudio(await getToken(), audio));
-      } catch (e) {
-        setError(errorMessage(e));
-      } finally {
-        setBusy(null);
-      }
-    },
-  });
+  const uploadRecording = async (audio: Blob) => {
+    setBusy("transcribing");
+    setError(null);
+    setFailedRecording(null);
+    try {
+      await finish(await logVoiceAudio(await getToken(), audio));
+    } catch (e) {
+      setError(errorMessage(e));
+      setFailedRecording(audio);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const voice = useVoiceCapture({ text, onText: setText, onRecording: uploadRecording });
 
   const submit = async () => {
     if (!text.trim() || busy) return;
@@ -172,6 +174,7 @@ export default function LogPage() {
   const toggleMic = () => {
     setResult(null);
     setError(null);
+    setFailedRecording(null);
     if (voice.active) voice.stop();
     else voice.start();
   };
@@ -310,14 +313,24 @@ export default function LogPage() {
       </Panel>
 
       <div className="space-y-3">
-        {voice.notice && <Banner tone="info">{voice.notice}</Banner>}
         {voice.error && (
           <Banner tone="warn" onDismiss={voice.clearError}>
             {voice.error}
           </Banner>
         )}
         {error && (
-          <Banner onDismiss={() => setError(null)}>{error}</Banner>
+          <Banner onDismiss={() => setError(null)}>
+            {error}
+            {failedRecording && (
+              <button
+                onClick={() => uploadRecording(failedRecording)}
+                disabled={!!busy}
+                className="ml-2 cursor-pointer font-medium text-ink underline underline-offset-2"
+              >
+                Retry recording
+              </button>
+            )}
+          </Banner>
         )}
         {info && !error && (
           <Banner tone="success" onDismiss={() => setInfo(null)}>

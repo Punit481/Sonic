@@ -94,11 +94,12 @@ export function useInsights() {
         setCanRegenerateAt(new Date(data.canRegenerateAt));
       }
     } catch (err: unknown) {
-      setError(errorMessage(err, "Couldn't generate insights."));
-      // Generated recently: the server says when the next run is allowed.
+      // Generated recently: the button shows when the next run is allowed, so no error is needed.
       if (err instanceof ApiError && typeof err.problem.canRegenerateAt === "string") {
         setCanRegenerate(false);
         setCanRegenerateAt(new Date(err.problem.canRegenerateAt));
+      } else {
+        setError(errorMessage(err, "Couldn't generate insights."));
       }
     } finally {
       setIsGenerating(false);

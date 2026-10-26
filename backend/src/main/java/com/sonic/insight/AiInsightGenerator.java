@@ -1,29 +1,44 @@
 package com.sonic.insight;
 
-import com.sonic.common.AiRetry;
-import com.sonic.common.ApiException;
+import com.sonic.common.AiErrors;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Component;
 
+/**
+ * Insights are a long reply, and in plain JSON mode the model sometimes drifts out of valid JSON
+ * (Groq then answers 400 "Failed to generate JSON"). A strict JSON schema makes the provider
+ * constrain the output to exactly the {@link Insight.Content} shape. The schema lives in
+ * insights.schema.json because strict mode needs every field listed as required, with nullable
+ * types for optional ones, which differs from the schema Spring AI generates.
+ */
 @Component
-class GeminiInsightGenerator implements InsightGenerator {
-
-    private static final Logger log = LoggerFactory.getLogger(GeminiInsightGenerator.class);
+class AiInsightGenerator implements InsightGenerator {
 
     private final ChatClient chat;
     private final Resource prompt;
+    private final OpenAiChatModel.ResponseFormat responseFormat;
 
-    GeminiInsightGenerator(ChatClient.Builder chat, @Value("classpath:prompts/insights.st") Resource prompt) {
+    AiInsightGenerator(
+            ChatClient.Builder chat,
+            @Value("classpath:prompts/insights.st") Resource prompt,
+            @Value("classpath:prompts/insights.schema.json") Resource schema) throws IOException {
         this.chat = chat.build();
         this.prompt = prompt;
+        this.responseFormat = OpenAiChatModel.ResponseFormat.builder()
+                .type(OpenAiChatModel.ResponseFormat.Type.JSON_SCHEMA)
+                .jsonSchema(schema.getContentAsString(StandardCharsets.UTF_8))
+                .strict(true)
+                .build();
     }
 
     @Override
@@ -42,7 +57,8 @@ class GeminiInsightGenerator implements InsightGenerator {
                 .collect(Collectors.joining("\n"));
 
         try {
-            return AiRetry.call("Gemini insight generation", () -> chat.prompt()
+            return chat.prompt()
+                    .options(OpenAiChatOptions.builder().responseFormat(responseFormat))
                     .user(user -> user.text(prompt)
                             .param("lookbackDays", s.lookbackDays())
                             .param("trainingPeriodDays", s.trainingPeriodDays())
@@ -59,10 +75,9 @@ class GeminiInsightGenerator implements InsightGenerator {
                             .param("lastTwoWeeks", s.lastTwoWeeks())
                             .param("bodyComposition", bodyComposition.isEmpty() ? "- No body metrics tracked" : bodyComposition))
                     .call()
-                    .entity(Insight.Content.class, spec -> spec.useProviderStructuredOutput()));
+                    .entity(Insight.Content.class);
         } catch (RuntimeException ex) {
-            log.warn("Gemini insight generation failed", ex);
-            throw ApiException.aiUnavailable("Could not generate insights right now. Please try again.");
+            throw AiErrors.translate("Insight generation", ex, "Could not generate insights right now. Please try again.");
         }
     }
 

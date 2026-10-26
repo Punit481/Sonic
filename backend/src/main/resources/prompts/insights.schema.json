@@ -1,0 +1,34 @@
+{
+  "type": "object",
+  "properties": {
+    "summary": { "type": "string" },
+    "achievements": { "type": "array", "items": { "type": "string" } },
+    "trends": {
+      "type": "object",
+      "properties": {
+        "volume": { "type": ["string", "null"] },
+        "frequency": { "type": ["string", "null"] },
+        "bodyComposition": { "type": ["string", "null"] }
+      },
+      "required": ["volume", "frequency", "bodyComposition"],
+      "additionalProperties": false
+    },
+    "recommendations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "priority": { "type": "string", "description": "high, medium or low" },
+          "action": { "type": "string" },
+          "reasoning": { "type": "string" }
+        },
+        "required": ["priority", "action", "reasoning"],
+        "additionalProperties": false
+      }
+    },
+    "warnings": { "type": "array", "items": { "type": "string" } },
+    "nextSteps": { "type": "array", "items": { "type": "string" } }
+  },
+  "required": ["summary", "achievements", "trends", "recommendations", "warnings", "nextSteps"],
+  "additionalProperties": false
+}
