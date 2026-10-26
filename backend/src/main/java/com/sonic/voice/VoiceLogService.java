@@ -17,12 +17,11 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.util.MimeType;
 
 @Service
 public class VoiceLogService {
@@ -52,33 +51,39 @@ public class VoiceLogService {
         this.clock = clock;
     }
 
-    /** {@code transcript} is what the user said; for audio input it comes from the model. */
+    /** {@code transcript} is what the user said; for audio input it is the speech-to-text result. */
     public record VoiceLogResult(String transcript, WorkoutSession workout, BodyMetric metric) {}
 
     public VoiceLogResult logText(UUID userId, String transcript, ZoneId zone) {
-        return log(userId, zone, today -> parser.parseText(transcript, today), transcript);
+        return log(userId, zone, () -> transcript);
     }
 
-    public VoiceLogResult logAudio(UUID userId, Resource audio, MimeType mimeType, ZoneId zone) {
-        return log(userId, zone, today -> parser.parseAudio(audio, mimeType, today), null);
+    public VoiceLogResult logAudio(UUID userId, Resource audio, ZoneId zone) {
+        return log(userId, zone, () -> {
+            String transcript = parser.transcribe(audio);
+            if (transcript == null || transcript.isBlank()) {
+                throw ApiException.notUnderstood("No speech was heard in the recording.");
+            }
+            return transcript.strip();
+        });
     }
 
-    private VoiceLogResult log(UUID userId, ZoneId zone, Function<LocalDate, ParsedVoiceLog> parse, String transcript) {
+    private VoiceLogResult log(UUID userId, ZoneId zone, Supplier<String> transcriptSource) {
         rateLimiter.consume(userId);
         Instant now = clock.instant();
         LocalDate today = LocalDate.ofInstant(now, zone);
 
-        // The AI call happens outside the transaction so no database connection is held while waiting.
-        ParsedVoiceLog parsed = parse.apply(today);
+        // The AI calls happen outside the transaction so no database connection is held while waiting.
+        String transcript = transcriptSource.get();
+        ParsedVoiceLog parsed = parser.parseText(transcript, today);
         NewWorkout workout = toWorkout(parsed.workout());
         NewBodyMetric metric = toMetric(parsed.bodyMetrics(), today, zone, now);
         if (workout == null && metric == null) {
             throw ApiException.notUnderstood("No workout or body measurement was found in what you said.");
         }
 
-        String spoken = transcript != null ? transcript : parsed.transcript();
         return transaction.execute(status -> new VoiceLogResult(
-                spoken,
+                transcript,
                 workout == null ? null : workouts.create(userId, workout, true),
                 metric == null ? null : metrics.create(userId, metric)));
     }

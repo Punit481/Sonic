@@ -12,7 +12,6 @@ import java.time.ZoneOffset;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.util.MimeType;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -42,7 +41,7 @@ class VoiceLogController {
     }
 
     /**
-     * The recording goes straight to Gemini, which transcribes and parses it in one call. The
+     * The recording is transcribed by Whisper, then parsed like a text log. The
      * frontend uses this when the browser has no working speech recognition (Safari, Firefox, Brave).
      */
     @PostMapping(path = "/audio", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -54,11 +53,8 @@ class VoiceLogController {
         if (file.isEmpty() || contentType == null || !contentType.startsWith("audio/")) {
             throw ApiException.badRequest("Upload a non-empty audio file.");
         }
-        // Drop parameters such as ";codecs=opus" that Gemini doesn't accept.
-        MimeType mimeType = MimeType.valueOf(contentType);
-        mimeType = new MimeType(mimeType.getType(), mimeType.getSubtype());
         return ResponseEntity.status(201)
-                .body(voiceLogs.logAudio(user.id(), file.getResource(), mimeType, zone(timeZone)));
+                .body(voiceLogs.logAudio(user.id(), file.getResource(), zone(timeZone)));
     }
 
     private static ZoneId zone(String timeZone) {

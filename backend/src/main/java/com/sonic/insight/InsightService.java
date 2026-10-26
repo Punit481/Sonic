@@ -82,10 +82,14 @@ class InsightService {
                     "No workouts in the last %d days.".formatted(config.lookback().toDays()));
         }
 
-        Insight.Content content = generator.generate(summary);
+        Insight.Content generated = generator.generate(summary);
+        if (generated == null) {
+            throw ApiException.aiUnavailable("The AI returned no insights. Please try again.");
+        }
+        Insight.Content content = generated.tidy();
         var violations = validator.validate(content);
         if (!violations.isEmpty()) {
-            log.warn("Gemini returned insights that failed validation: {}", violations);
+            log.warn("The model returned insights that failed validation: {}", violations);
             throw ApiException.aiUnavailable("The generated insights were incomplete. Please try again.");
         }
 

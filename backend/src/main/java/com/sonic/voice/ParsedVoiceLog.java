@@ -8,13 +8,11 @@ import java.util.List;
 import org.jspecify.annotations.Nullable;
 
 /**
- * What the model extracts from a voice log. Spring AI turns these records into Gemini's
- * response schema; {@code @Nullable} fields are optional there, so the model can leave out
- * what wasn't said instead of inventing a value.
+ * What the model extracts from a voice log. Spring AI turns these records into the JSON schema
+ * the model is told to follow; {@code @Nullable} fields are optional there, so the model can
+ * leave out what wasn't said instead of inventing a value.
  */
 public record ParsedVoiceLog(
-        @JsonPropertyDescription("Verbatim transcript of the audio. Omit when the input was already text.")
-        @Nullable String transcript,
         @JsonPropertyDescription("Omit if the input has no workout data")
         @Nullable Workout workout,
         @JsonPropertyDescription("Omit if the input has no body measurements")

@@ -20,7 +20,6 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
-import org.springframework.util.MimeType;
 
 class VoiceLogApiTest extends IntegrationTest {
 
@@ -35,7 +34,7 @@ class VoiceLogApiTest extends IntegrationTest {
     void savesTheWorkoutAndBodyMetricTheModelExtracted() throws Exception {
         String user = newClerkId();
         given(voiceParser.parseText(eq("bench 2 sets of 8 at 185, weighed 80 kilos"), any()))
-                .willReturn(new ParsedVoiceLog(null, BENCH, new BodyMetrics(80.0, null, null, null)));
+                .willReturn(new ParsedVoiceLog(BENCH, new BodyMetrics(80.0, null, null, null)));
 
         mvc.perform(post("/api/v1/voice-logs").with(as(user)).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"transcript\": \"  bench 2 sets of 8 at 185, weighed 80 kilos \", \"timeZone\": \"Asia/Kolkata\"}"))
@@ -52,7 +51,7 @@ class VoiceLogApiTest extends IntegrationTest {
 
     @Test
     void reportsInputItCouldNotUnderstand() throws Exception {
-        given(voiceParser.parseText(any(), any())).willReturn(new ParsedVoiceLog(null, null, null));
+        given(voiceParser.parseText(any(), any())).willReturn(new ParsedVoiceLog(null, null));
 
         mvc.perform(post("/api/v1/voice-logs").with(as(newClerkId())).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"transcript\": \"what's the weather\"}"))
@@ -68,7 +67,7 @@ class VoiceLogApiTest extends IntegrationTest {
                 List.of(new Exercise("squat", ExerciseCategory.STRENGTH, false,
                         List.of(new ExerciseSet(-5, 100.0, null, null, null, null)))),
                 null, null);
-        given(voiceParser.parseText(any(), any())).willReturn(new ParsedVoiceLog(null, negativeReps, null));
+        given(voiceParser.parseText(any(), any())).willReturn(new ParsedVoiceLog(negativeReps, null));
 
         mvc.perform(post("/api/v1/voice-logs").with(as(user)).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"transcript\": \"squat minus five reps\"}"))
@@ -81,7 +80,7 @@ class VoiceLogApiTest extends IntegrationTest {
         String user = newClerkId();
         given(voiceParser.parseText(any(), any())).willAnswer(call -> {
             LocalDate today = call.getArgument(1);
-            return new ParsedVoiceLog(null, null, new BodyMetrics(79.0, null, null, today.minusDays(1)));
+            return new ParsedVoiceLog(null, new BodyMetrics(79.0, null, null, today.minusDays(1)));
         });
 
         mvc.perform(post("/api/v1/voice-logs").with(as(user)).contentType(MediaType.APPLICATION_JSON)
@@ -95,13 +94,24 @@ class VoiceLogApiTest extends IntegrationTest {
     void audioUploadIsTranscribedAndLogged() throws Exception {
         String user = newClerkId();
         MockMultipartFile audio = new MockMultipartFile("file", "rec.webm", "audio/webm;codecs=opus", new byte[] {1, 2, 3});
-        given(voiceParser.parseAudio(any(), eq(new MimeType("audio", "webm")), any()))
-                .willReturn(new ParsedVoiceLog("bench two sets of eight", BENCH, null));
+        given(voiceParser.transcribe(any())).willReturn(" bench two sets of eight ");
+        given(voiceParser.parseText(eq("bench two sets of eight"), any())).willReturn(new ParsedVoiceLog(BENCH, null));
 
         mvc.perform(multipart("/api/v1/voice-logs/audio").file(audio).with(as(user)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.transcript").value("bench two sets of eight"))
                 .andExpect(jsonPath("$.workout.exercises[0].sets.length()").value(2));
+    }
+
+    @Test
+    void silentRecordingIsNotUnderstood() throws Exception {
+        given(voiceParser.transcribe(any())).willReturn("  ");
+
+        mvc.perform(multipart("/api/v1/voice-logs/audio")
+                        .file(new MockMultipartFile("file", "rec.webm", "audio/webm", new byte[] {1}))
+                        .with(as(newClerkId())))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.type").value("https://sonic.app/problems/input-not-understood"));
     }
 
     @Test

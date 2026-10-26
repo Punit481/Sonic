@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
  * - "live": the browser's Web Speech API transcribes as you talk, into editable text.
  *   Chrome and Edge support it. Brave, Arc and some Chromium builds expose the API but
  *   fail with a "network" or "service-not-allowed" error, and Firefox lacks it.
- * - "record": the microphone is recorded and the server transcribes it with Gemini.
+ * - "record": the microphone is recorded and the server transcribes it with Whisper.
  *   Works in every modern browser.
  *
  * The hook starts in "live" when the API exists and switches to "record" for good if the
@@ -46,6 +46,33 @@ const speechRecognition = (): SpeechRecognitionCtor | undefined => {
   return w.SpeechRecognition ?? w.webkitSpeechRecognition;
 };
 
+const MODE_KEY = "sonic.voiceMode";
+
+const savedMode = (): CaptureMode | null => {
+  try {
+    const value = localStorage.getItem(MODE_KEY);
+    return value === "live" || value === "record" ? value : null;
+  } catch {
+    return null;
+  }
+};
+
+const saveMode = (mode: CaptureMode) => {
+  try {
+    localStorage.setItem(MODE_KEY, mode);
+  } catch {
+    // Private mode or blocked storage: the browser just asks again next visit.
+  }
+};
+
+/** Brave exposes the Web Speech API but blocks the speech service behind it. */
+const isBrave = () => typeof navigator !== "undefined" && "brave" in navigator;
+
+const initialMode = (): CaptureMode => {
+  if (!speechRecognition() || isBrave()) return "record";
+  return savedMode() ?? "live";
+};
+
 const canRecord = () =>
   typeof window !== "undefined" &&
   typeof MediaRecorder !== "undefined" &&
@@ -71,10 +98,9 @@ interface Options {
 }
 
 export function useVoiceCapture({ text, onText, onRecording }: Options) {
-  const [mode, setMode] = useState<CaptureMode>(() => (speechRecognition() ? "live" : "record"));
+  const [mode, setMode] = useState<CaptureMode>(initialMode);
   const [state, setState] = useState<CaptureState>("idle");
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
 
   const recognition = useRef<SpeechRecognitionLike | null>(null);
@@ -137,7 +163,11 @@ export function useVoiceCapture({ text, onText, onRecording }: Options) {
     setState("recording");
   }, []);
 
-  const switchToRecording = useCallback((reason: string) => {
+  /**
+   * Live transcription failed in a way that will keep failing in this browser. The user pressed
+   * the mic to talk, so start recording right away, and remember the choice for next time.
+   */
+  const switchToRecording = useCallback(() => {
     wantLive.current = false;
     recognition.current?.abort();
     recognition.current = null;
@@ -145,11 +175,12 @@ export function useVoiceCapture({ text, onText, onRecording }: Options) {
     setState("idle");
     if (canRecord()) {
       setMode("record");
-      setNotice(reason);
+      saveMode("record");
+      void startRecording();
     } else {
       setError("Voice input isn't available in this browser. Type your workout instead.");
     }
-  }, []);
+  }, [startRecording]);
 
   const startLive = useCallback(() => {
     const Recognition = speechRecognition();
@@ -182,9 +213,7 @@ export function useVoiceCapture({ text, onText, onRecording }: Options) {
         case "network":
         case "service-not-allowed":
         case "language-not-supported":
-          switchToRecording(
-            "This browser's live transcription isn't working, so Sonic will record you and transcribe on the server instead."
-          );
+          switchToRecording();
           return;
         case "not-allowed":
           wantLive.current = false;
@@ -222,12 +251,11 @@ export function useVoiceCapture({ text, onText, onRecording }: Options) {
       r.start();
       startTimer();
     } catch {
-      switchToRecording("Live transcription couldn't start here, so Sonic will record you instead.");
+      switchToRecording();
     }
   }, [text, switchToRecording]);
 
   const start = useCallback(() => {
-    setNotice((n) => (mode === "record" ? n : null));
     if (mode === "live") startLive();
     else void startRecording();
   }, [mode, startLive, startRecording]);
@@ -261,18 +289,17 @@ export function useVoiceCapture({ text, onText, onRecording }: Options) {
     setMode: (m: CaptureMode) => {
       if (state === "idle") {
         setMode(m);
-        setNotice(null);
+        saveMode(m);
         setError(null);
       }
     },
-    liveAvailable: !!speechRecognition(),
+    liveAvailable: !!speechRecognition() && !isBrave(),
     recordAvailable: canRecord(),
     supported,
     state,
     active: state !== "idle",
     elapsed,
     error,
-    notice,
     clearError: () => setError(null),
     start,
     stop,

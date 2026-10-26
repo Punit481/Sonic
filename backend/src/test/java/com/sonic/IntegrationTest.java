@@ -23,13 +23,13 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 /**
  * Boots the whole app against a real Postgres. Only the edges are stubbed: the JWT decoder
- * (so tests don't need Clerk) and the two AI interfaces (so tests don't call Gemini).
+ * (so tests don't need Clerk) and the two AI interfaces (so tests don't call the AI provider).
  * A request sent {@link #as} a user carries the bearer token {@code test.<clerkId>}, which
  * still goes through the real security chain and user provisioning.
  */
 @SpringBootTest(properties = {
     "spring.security.oauth2.resourceserver.jwt.issuer-uri=https://clerk.test",
-    "spring.ai.google.genai.api-key=test-key",
+    "spring.ai.openai.api-key=test-key",
     "spring.docker.compose.enabled=false",
 })
 @AutoConfigureMockMvc
