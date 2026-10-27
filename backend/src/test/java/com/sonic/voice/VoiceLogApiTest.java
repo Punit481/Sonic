@@ -25,8 +25,9 @@ class VoiceLogApiTest extends IntegrationTest {
 
     private static final Workout BENCH = new Workout(
             List.of(new Exercise("bench press", ExerciseCategory.STRENGTH, false, List.of(
-                    new ExerciseSet(8, 84.0, null, null, null, null),
-                    new ExerciseSet(8, 84.0, null, null, null, null)))),
+                    new ExerciseSet(null, 8, 84.0, null, null, null, null),
+                    new ExerciseSet(null, 8, 84.0, null, null, null, null)))),
+            null,
             null,
             null);
 
@@ -40,7 +41,7 @@ class VoiceLogApiTest extends IntegrationTest {
                         .content("{\"transcript\": \"  bench 2 sets of 8 at 185, weighed 80 kilos \", \"timeZone\": \"Asia/Kolkata\"}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.transcript").value("bench 2 sets of 8 at 185, weighed 80 kilos"))
-                .andExpect(jsonPath("$.workout.exercises[0].name").value("bench press"))
+                .andExpect(jsonPath("$.workout.exercises[0].name").value("Bench Press"))
                 .andExpect(jsonPath("$.workout.exercises[0].aiTagged").value(true))
                 .andExpect(jsonPath("$.workout.exercises[0].sets[1].weight").value(84.0))
                 .andExpect(jsonPath("$.metric.weight").value(80.0));
@@ -65,8 +66,8 @@ class VoiceLogApiTest extends IntegrationTest {
         String user = newClerkId();
         Workout negativeReps = new Workout(
                 List.of(new Exercise("squat", ExerciseCategory.STRENGTH, false,
-                        List.of(new ExerciseSet(-5, 100.0, null, null, null, null)))),
-                null, null);
+                        List.of(new ExerciseSet(null, -5, 100.0, null, null, null, null)))),
+                null, null, null);
         given(voiceParser.parseText(any(), any())).willReturn(new ParsedVoiceLog(negativeReps, null));
 
         mvc.perform(post("/api/v1/voice-logs").with(as(user)).contentType(MediaType.APPLICATION_JSON)
@@ -79,7 +80,7 @@ class VoiceLogApiTest extends IntegrationTest {
     void storesPastMeasurementsOnTheDayTheyWereTaken() throws Exception {
         String user = newClerkId();
         given(voiceParser.parseText(any(), any())).willAnswer(call -> {
-            LocalDate today = call.getArgument(1);
+            LocalDate today = call.<VoiceParser.Context>getArgument(1).today();
             return new ParsedVoiceLog(null, new BodyMetrics(79.0, null, null, today.minusDays(1)));
         });
 

@@ -46,7 +46,34 @@ class WorkoutRepository {
                 .param("duration", workout.duration())
                 .param("note", workout.note())
                 .update();
+        insertExercises(sessionId, workout, aiTagged);
+        return sessionId;
+    }
 
+    /** Replaces the session's fields and all of its exercises and sets. False if it isn't the user's. */
+    boolean update(UUID userId, UUID sessionId, NewWorkout workout) {
+        int updated = jdbc.sql("""
+                update workout_session
+                set performed_at = coalesce(:performedAt, performed_at), duration_hours = :duration, note = :note
+                where id = :id and user_id = :userId
+                """)
+                .param("id", sessionId)
+                .param("userId", userId)
+                .param("performedAt", workout.date() == null ? null : toDb(workout.date()))
+                .param("duration", workout.duration())
+                .param("note", workout.note())
+                .update();
+        if (updated == 0) {
+            return false;
+        }
+        // Sets go with their exercises (on delete cascade).
+        jdbc.sql("delete from exercise where session_id = :id").param("id", sessionId).update();
+        // The user reviewed every value, so nothing in it is an unchecked AI guess any more.
+        insertExercises(sessionId, workout, false);
+        return true;
+    }
+
+    private void insertExercises(UUID sessionId, NewWorkout workout, boolean aiTagged) {
         List<SqlParameterSource> exerciseRows = new ArrayList<>();
         List<SqlParameterSource> setRows = new ArrayList<>();
         for (int i = 0; i < workout.exercises().size(); i++) {
@@ -56,7 +83,7 @@ class WorkoutRepository {
                     .addValue("id", exerciseId)
                     .addValue("sessionId", sessionId)
                     .addValue("position", i)
-                    .addValue("name", exercise.name().strip())
+                    .addValue("name", ExerciseNames.canonical(exercise.name()))
                     .addValue("category", exercise.category().value())
                     .addValue("isCustom", Boolean.TRUE.equals(exercise.isCustom()))
                     .addValue("aiTagged", aiTagged));
@@ -84,7 +111,22 @@ class WorkoutRepository {
                     (id, exercise_id, position, reps, weight_kg, distance_km, duration_hours, intensity, note)
                 values (:id, :exerciseId, :position, :reps, :weight, :distance, :duration, :intensity, :note)
                 """, setRows.toArray(SqlParameterSource[]::new));
-        return sessionId;
+    }
+
+    /** The exercise names this user has logged, most used first, so the AI can reuse them. */
+    List<String> exerciseNames(UUID userId, int limit) {
+        return jdbc.sql("""
+                select e.name
+                from exercise e join workout_session w on w.id = e.session_id
+                where w.user_id = :userId
+                group by e.name
+                order by count(*) desc, e.name
+                limit :limit
+                """)
+                .param("userId", userId)
+                .param("limit", limit)
+                .query(String.class)
+                .list();
     }
 
     long countByUser(UUID userId) {

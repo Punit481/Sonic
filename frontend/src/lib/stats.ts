@@ -1,3 +1,5 @@
+import type { WeightUnit } from "./api";
+import { displayWeight } from "./units";
 import type { Exercise, ExerciseCategory, Metric, WorkoutLog } from "../stores/types";
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -247,21 +249,25 @@ export const formatDay = (date: string | Date, now = new Date()) => {
   });
 };
 
-/** "4 × 8 @ 80 kg", "5.2 km · 28 min", "15 min". */
-export const describeSet = (set: Exercise["sets"][number]) => {
+/** "82.5 kg", or "182 lb" for a user who thinks in pounds. Input is always kg. */
+export const formatWeight = (kg: number, unit: WeightUnit = "kg", digits = 1) =>
+  `${formatNumber(displayWeight(kg, unit), digits)} ${unit}`;
+
+/** "8 reps · 80 kg", "5.2 km · 28 min", "15 min". */
+export const describeSet = (set: Exercise["sets"][number], unit: WeightUnit = "kg") => {
   const parts: string[] = [];
   if (set.reps != null) parts.push(`${set.reps} reps`);
-  if (set.weight != null) parts.push(`${formatNumber(set.weight, 1)} kg`);
+  if (set.weight != null) parts.push(formatWeight(set.weight, unit));
   if (set.distance != null) parts.push(`${formatNumber(set.distance, 2)} km`);
   if (set.duration != null) parts.push(formatMinutes(set.duration * 60));
   return parts.join(" · ") || "Done";
 };
 
 /** Groups identical consecutive sets: "3 × 8 reps · 80 kg". */
-export const describeSets = (sets: Exercise["sets"]) => {
+export const describeSets = (sets: Exercise["sets"], unit: WeightUnit = "kg") => {
   const lines: { text: string; count: number }[] = [];
   for (const set of sets) {
-    const text = describeSet(set);
+    const text = describeSet(set, unit);
     const last = lines[lines.length - 1];
     if (last && last.text === text) last.count++;
     else lines.push({ text, count: 1 });

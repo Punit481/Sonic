@@ -22,12 +22,16 @@ public record ParsedVoiceLog(
             List<Exercise> exercises,
             @JsonPropertyDescription("Length of the whole session in hours, only if stated for the whole session")
             @Nullable Double durationHours,
-            @Nullable String note) {}
+            @Nullable String note,
+            @JsonPropertyDescription("Day the workout was done, ISO-8601, resolved against today. Only when a day was said")
+            @Nullable LocalDate date) {}
 
     public record Exercise(
             String name, ExerciseCategory category, @Nullable Boolean isCustom, List<ExerciseSet> sets) {}
 
     public record ExerciseSet(
+            @JsonPropertyDescription("How many identical sets this entry stands for: 5 for \"5 sets of 5\". Omit for 1")
+            @Nullable Integer count,
             @Nullable Integer reps,
             @JsonPropertyDescription("kg") @Nullable Double weight,
             @JsonPropertyDescription("km") @Nullable Double distance,

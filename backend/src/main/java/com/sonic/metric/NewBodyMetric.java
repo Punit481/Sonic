@@ -1,5 +1,6 @@
 package com.sonic.metric;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.Positive;
@@ -13,6 +14,7 @@ public record NewBodyMetric(
         @PositiveOrZero @DecimalMax("100") Double bodyFat,
         @Positive Double muscleMass) {
 
+    @JsonIgnore
     @AssertTrue(message = "At least one of weight, bodyFat or muscleMass is required")
     public boolean isAnyValuePresent() {
         return weight != null || bodyFat != null || muscleMass != null;

@@ -1,4 +1,4 @@
-import type { Metric, WorkoutLog } from "../stores/types";
+import type { ExerciseCategory, Metric, WorkoutLog } from "../stores/types";
 
 export const getApiBaseUrl = (): string => {
   return import.meta.env.VITE_BACKEND_URL || "http://localhost:8080";
@@ -67,17 +67,75 @@ export interface Page<T> {
   totalPages: number;
 }
 
+export type WeightUnit = "kg" | "lb";
+
 export interface Me {
   id: string;
   email: string | null;
   name: string | null;
   isPremium: boolean;
+  weightUnit: WeightUnit;
+}
+
+/** A workout to save or replace. Weight in kg, distance in km, duration in hours. */
+export interface DraftWorkout {
+  date?: string | null;
+  duration?: number | null;
+  note?: string | null;
+  exercises: {
+    name: string;
+    category: ExerciseCategory;
+    isCustom?: boolean | null;
+    sets: {
+      reps?: number | null;
+      weight?: number | null;
+      distance?: number | null;
+      duration?: number | null;
+      intensity?: string | null;
+      note?: string | null;
+    }[];
+  }[];
+}
+
+export interface DraftMetric {
+  date?: string | null;
+  weight?: number | null;
+  bodyFat?: number | null;
+  muscleMass?: number | null;
+}
+
+/** What the AI understood, not saved yet. */
+export interface VoiceDraft {
+  transcript: string | null;
+  workout: DraftWorkout | null;
+  metric: DraftMetric | null;
+}
+
+export interface PersonalRecord {
+  exercise: string;
+  kind: "weight" | "e1rm" | "reps" | "distance" | "duration";
+  value: number;
+  previous: number;
 }
 
 export interface VoiceLogResult {
   transcript: string | null;
   workout: WorkoutLog | null;
   metric: Metric | null;
+  records: PersonalRecord[];
+}
+
+/** All-time bests for one exercise. Weights in kg, distance in km, duration in hours. */
+export interface ExerciseStats {
+  name: string;
+  category: ExerciseCategory;
+  sessions: number;
+  lastPerformed: string;
+  bestWeight: number | null;
+  bestE1rm: number | null;
+  bestReps: number | null;
+  bestDistance: number | null;
+  bestDuration: number | null;
 }
 
 const userTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -112,26 +170,6 @@ export const saveDraft = (token: string | null | undefined, text: string) =>
 export const deleteDraft = (token?: string | null) =>
   request<void>("/api/v1/workout-draft", token, { method: "DELETE" });
 
-export const logVoiceText = (token: string | null | undefined, transcript: string) =>
-  request<VoiceLogResult>("/api/v1/voice-logs", token, {
-    method: "POST",
-    body: JSON.stringify({ transcript, timeZone: userTimeZone() }),
-  });
-
-const audioExtension = (type: string) =>
-  type.includes("mp4") ? "m4a" : type.includes("ogg") ? "ogg" : "webm";
-
-/** The server transcribes and parses the recording in one call. */
-export const logVoiceAudio = (token: string | null | undefined, audio: Blob) => {
-  const form = new FormData();
-  form.append("file", audio, `recording.${audioExtension(audio.type)}`);
-  form.append("timeZone", userTimeZone());
-  return request<VoiceLogResult>("/api/v1/voice-logs/audio", token, {
-    method: "POST",
-    body: form,
-  });
-};
-
 export const deleteWorkout = (token: string | null | undefined, id: string) =>
   request<void>(`/api/v1/workouts/${id}`, token, { method: "DELETE" });
 
@@ -149,6 +187,39 @@ export const errorMessage = (error: unknown, fallback = "Something went wrong. P
   }
   return fallback;
 };
+
+export const updateWeightUnit = (token: string | null | undefined, weightUnit: WeightUnit) =>
+  request<Me>("/api/v1/me", token, { method: "PATCH", body: JSON.stringify({ weightUnit }) });
+
+/** What the AI understood from text, for review. Nothing is saved. */
+export const parseVoiceText = (token: string | null | undefined, transcript: string) =>
+  request<VoiceDraft>("/api/v1/voice-logs/parse", token, {
+    method: "POST",
+    body: JSON.stringify({ transcript, timeZone: userTimeZone() }),
+  });
+
+const audioExtension = (type: string) =>
+  type.includes("mp4") ? "m4a" : type.includes("ogg") ? "ogg" : "webm";
+
+/** A recording transcribed and parsed, for review. Nothing is saved. */
+export const parseVoiceAudio = (token: string | null | undefined, audio: Blob) => {
+  const form = new FormData();
+  form.append("file", audio, `recording.${audioExtension(audio.type)}`);
+  form.append("timeZone", userTimeZone());
+  return request<VoiceDraft>("/api/v1/voice-logs/audio/parse", token, { method: "POST", body: form });
+};
+
+/** Saves a reviewed draft and reports any personal records it set. */
+export const confirmVoiceLog = (token: string | null | undefined, draft: VoiceDraft) =>
+  request<VoiceLogResult>("/api/v1/voice-logs/confirm", token, { method: "POST", body: JSON.stringify(draft) });
+
+export const updateWorkout = (token: string | null | undefined, id: string, workout: DraftWorkout) =>
+  request<{ workout: WorkoutLog; records: PersonalRecord[] }>(`/api/v1/workouts/${id}`, token, {
+    method: "PUT",
+    body: JSON.stringify(workout),
+  });
+
+export const fetchExercises = (token?: string | null) => request<ExerciseStats[]>("/api/v1/exercises", token);
 
 export const fetchInsights = (token?: string | null) =>
   request<InsightStatus>("/api/v1/insights/latest", token);
