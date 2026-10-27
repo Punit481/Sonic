@@ -1,17 +1,56 @@
 import { useAuth, UserButton } from "@clerk/clerk-react";
 import { useCallback, useEffect } from "react";
 import { Link, Navigate, NavLink, Outlet } from "react-router";
+import { updateWeightUnit, type WeightUnit } from "../lib/api";
 import { cx } from "../lib/cx";
 import { useUserStore } from "../stores/userStore";
 import { Icon, type IconName } from "./Icon";
-import { Banner, LinkButton, Logo, Spinner } from "./ui";
+import { Banner, LinkButton, Logo, Segmented, Spinner } from "./ui";
 
 const nav: { to: string; label: string; icon: IconName; end?: boolean }[] = [
   { to: "/app", label: "Overview", icon: "home", end: true },
   { to: "/app/log", label: "Log", icon: "mic" },
   { to: "/app/history", label: "History", icon: "list" },
+  { to: "/app/exercises", label: "Exercises", icon: "trophy" },
   { to: "/app/insights", label: "Insights", icon: "spark" },
 ];
+
+/** kg/lb switch. Saved to the account, so the AI also assumes it when no unit is said. */
+function UnitToggle({ compact = false }: { compact?: boolean }) {
+  const { getToken } = useAuth();
+  const { weightUnit, setWeightUnit } = useUserStore();
+  const change = async (unit: WeightUnit) => {
+    if (unit === weightUnit) return;
+    setWeightUnit(unit);
+    try {
+      await updateWeightUnit(await getToken(), unit);
+    } catch {
+      setWeightUnit(weightUnit);
+    }
+  };
+  if (compact) {
+    return (
+      <button
+        onClick={() => change(weightUnit === "kg" ? "lb" : "kg")}
+        aria-label={`Weight unit: ${weightUnit}. Switch to ${weightUnit === "kg" ? "lb" : "kg"}`}
+        className="h-8 cursor-pointer rounded-lg border border-line px-2.5 text-xs font-medium text-muted hover:text-ink"
+      >
+        {weightUnit}
+      </button>
+    );
+  }
+  return (
+    <Segmented
+      label="Weight unit"
+      value={weightUnit}
+      onChange={change}
+      options={[
+        { value: "kg", label: "kg" },
+        { value: "lb", label: "lb" },
+      ]}
+    />
+  );
+}
 
 /** Signed-in shell: sidebar on desktop, bottom tabs on phones. Loads the user's data once. */
 export default function AppLayout() {
@@ -72,7 +111,11 @@ export default function AppLayout() {
         <LinkButton to="/app/log" variant="primary" className="mt-6 w-full" icon="mic">
           Log a workout
         </LinkButton>
-        <div className="mt-auto flex items-center gap-3 border-t border-line px-3 pt-5">
+        <div className="mt-auto flex items-center justify-between px-3 pb-4 text-sm text-muted">
+          Units
+          <UnitToggle />
+        </div>
+        <div className="flex items-center gap-3 border-t border-line px-3 pt-5">
           <UserButton showName appearance={{ elements: { userButtonOuterIdentifier: { color: "#f4f4f5" } } }} />
         </div>
       </aside>
@@ -82,7 +125,10 @@ export default function AppLayout() {
         <Link to="/app">
           <Logo />
         </Link>
-        <UserButton />
+        <div className="flex items-center gap-3">
+          <UnitToggle compact />
+          <UserButton />
+        </div>
       </header>
 
       <main className="mx-auto w-full max-w-6xl px-4 pt-6 pb-28 sm:px-6 lg:px-10 lg:pt-10 lg:pb-12">
@@ -105,7 +151,7 @@ export default function AppLayout() {
       {/* Phone tab bar */}
       <nav
         aria-label="Main"
-        className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-4 border-t border-line bg-surface/95 px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur lg:hidden"
+        className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 border-t border-line bg-surface/95 px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur lg:hidden"
       >
         {nav.map((item) => (
           <NavLink

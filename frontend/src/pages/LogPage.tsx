@@ -1,11 +1,24 @@
 import { useAuth } from "@clerk/clerk-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../components/Icon";
+import Records from "../components/Records";
 import { Banner, Button, CategoryDot, LinkButton, Panel, Segmented, Spinner } from "../components/ui";
+import WorkoutEditor from "../components/WorkoutEditor";
 import { useVoiceCapture } from "../hooks/useVoiceCapture";
-import { deleteDraft, errorMessage, logVoiceAudio, logVoiceText, saveDraft, type VoiceLogResult } from "../lib/api";
+import {
+  confirmVoiceLog,
+  deleteDraft,
+  errorMessage,
+  parseVoiceAudio,
+  parseVoiceText,
+  saveDraft,
+  type VoiceDraft,
+  type VoiceLogResult,
+  type WeightUnit,
+} from "../lib/api";
 import { cx } from "../lib/cx";
-import { describeSets, formatDay, formatNumber } from "../lib/stats";
+import { recentDistinctWorkouts, workoutToDraft } from "../lib/drafts";
+import { describeSets, exerciseSummaries, formatDay, formatNumber, formatWeight } from "../lib/stats";
 import { useUserStore } from "../stores/userStore";
 
 const EXAMPLES = [
@@ -18,25 +31,24 @@ const EXAMPLES = [
 
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
-function Result({ result, onAgain }: { result: VoiceLogResult; onAgain: () => void }) {
+function Result({ result, unit, onAgain }: { result: VoiceLogResult; unit: WeightUnit; onAgain: () => void }) {
   const { workout, metric } = result;
   return (
-    <Panel className="animate-rise border-accent/30">
+    <Panel className="animate-rise space-y-5 border-accent/30">
       <div className="flex items-center gap-3">
         <span className="grid size-9 place-items-center rounded-full bg-accent text-accent-ink">
           <Icon name="check" className="size-5" />
         </span>
         <div>
           <h2 className="font-display text-lg font-semibold">Logged</h2>
-          <p className="text-sm text-muted">
-            {workout ? formatDay(workout.date) : metric ? formatDay(metric.date) : ""}
-            {result.transcript && <> · "{result.transcript}"</>}
-          </p>
+          <p className="text-sm text-muted">{workout ? formatDay(workout.date) : metric ? formatDay(metric.date) : ""}</p>
         </div>
       </div>
 
+      <Records records={result.records} unit={unit} />
+
       {workout && (
-        <ul className="mt-5 divide-y divide-line rounded-xl border border-line">
+        <ul className="divide-y divide-line rounded-xl border border-line">
           {workout.exercises.map((e) => (
             <li key={e.id} className="flex items-start gap-3 px-4 py-3">
               <span className="mt-1.5">
@@ -44,23 +56,22 @@ function Result({ result, onAgain }: { result: VoiceLogResult; onAgain: () => vo
               </span>
               <div className="flex-1">
                 <div className="font-medium">{e.name}</div>
-                <div className="text-sm text-muted">{describeSets(e.sets).join(" · ")}</div>
+                <div className="text-sm text-muted">{describeSets(e.sets, unit).join(" · ")}</div>
               </div>
-              <span className="text-xs text-faint capitalize">{e.category}</span>
             </li>
           ))}
         </ul>
       )}
 
       {metric && (
-        <div className="mt-4 flex flex-wrap gap-2">
-          {metric.weight != null && <Chip label="Weight" value={`${formatNumber(metric.weight, 1)} kg`} />}
+        <div className="flex flex-wrap gap-2">
+          {metric.weight != null && <Chip label="Weight" value={formatWeight(metric.weight, unit)} />}
           {metric.bodyFat != null && <Chip label="Body fat" value={`${formatNumber(metric.bodyFat, 1)}%`} />}
-          {metric.muscleMass != null && <Chip label="Muscle" value={`${formatNumber(metric.muscleMass, 1)} kg`} />}
+          {metric.muscleMass != null && <Chip label="Muscle" value={formatWeight(metric.muscleMass, unit)} />}
         </div>
       )}
 
-      <div className="mt-6 flex flex-wrap gap-3">
+      <div className="flex flex-wrap gap-3">
         <Button variant="primary" icon="mic" onClick={onAgain}>
           Log another
         </Button>
@@ -78,18 +89,25 @@ function Chip({ label, value }: { label: string; value: string }) {
   );
 }
 
+type Busy = null | "reading" | "transcribing" | "saving" | "drafting";
+
 export default function LogPage() {
   const { getToken } = useAuth();
-  const { draft, setDraft, addLog, addMetric, status } = useUserStore();
+  const { draft, setDraft, addLog, addMetric, status, logs, weightUnit } = useUserStore();
   const [text, setText] = useState("");
-  const [busy, setBusy] = useState<null | "logging" | "transcribing" | "saving">(null);
+  const [busy, setBusy] = useState<Busy>(null);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  /** What the AI understood (or a repeated workout), being reviewed before it's saved. */
+  const [review, setReview] = useState<VoiceDraft | null>(null);
   const [result, setResult] = useState<VoiceLogResult | null>(null);
   // Kept after a failed upload so the user can retry without recording again.
   const [failedRecording, setFailedRecording] = useState<Blob | null>(null);
   const restored = useRef(false);
   const textarea = useRef<HTMLTextAreaElement>(null);
+
+  const exerciseNames = useMemo(() => exerciseSummaries(logs).map((e) => e.name), [logs]);
+  const recent = useMemo(() => recentDistinctWorkouts(logs, 3), [logs]);
 
   // Bring back a transcript saved for later, once.
   useEffect(() => {
@@ -102,24 +120,12 @@ export default function LogPage() {
     }
   }, [status, draft]);
 
-  const finish = async (res: VoiceLogResult) => {
-    if (res.workout) addLog(res.workout);
-    if (res.metric) addMetric(res.metric);
-    setResult(res);
-    setText("");
-    setInfo(null);
-    if (draft) {
-      setDraft("");
-      deleteDraft(await getToken()).catch(() => {});
-    }
-  };
-
   const uploadRecording = async (audio: Blob) => {
     setBusy("transcribing");
     setError(null);
     setFailedRecording(null);
     try {
-      await finish(await logVoiceAudio(await getToken(), audio));
+      setReview(await parseVoiceAudio(await getToken(), audio));
     } catch (e) {
       setError(errorMessage(e));
       setFailedRecording(audio);
@@ -130,13 +136,36 @@ export default function LogPage() {
 
   const voice = useVoiceCapture({ text, onText: setText, onRecording: uploadRecording });
 
-  const submit = async () => {
+  const readText = async () => {
     if (!text.trim() || busy) return;
     if (voice.active) voice.stop();
-    setBusy("logging");
+    setBusy("reading");
     setError(null);
     try {
-      await finish(await logVoiceText(await getToken(), text.trim()));
+      setReview(await parseVoiceText(await getToken(), text.trim()));
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const confirm = async (edited: Pick<VoiceDraft, "workout" | "metric">) => {
+    if (!review) return;
+    setBusy("saving");
+    setError(null);
+    try {
+      const saved = await confirmVoiceLog(await getToken(), { transcript: review.transcript, ...edited });
+      if (saved.workout) addLog(saved.workout);
+      if (saved.metric) addMetric(saved.metric);
+      setResult(saved);
+      setReview(null);
+      setText("");
+      setInfo(null);
+      if (draft) {
+        setDraft("");
+        deleteDraft(await getToken()).catch(() => {});
+      }
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -147,7 +176,7 @@ export default function LogPage() {
   const saveForLater = async () => {
     if (!text.trim() || busy) return;
     if (voice.active) voice.stop();
-    setBusy("saving");
+    setBusy("drafting");
     setError(null);
     try {
       await saveDraft(await getToken(), text.trim());
@@ -182,9 +211,10 @@ export default function LogPage() {
   if (result) {
     return (
       <div className="mx-auto max-w-2xl space-y-6">
-        <Header />
+        <Header title="Nice work." />
         <Result
           result={result}
+          unit={weightUnit}
           onAgain={() => {
             setResult(null);
             voice.start();
@@ -194,10 +224,41 @@ export default function LogPage() {
     );
   }
 
+  if (review) {
+    return (
+      <div className="mx-auto max-w-2xl space-y-6">
+        <Header title="Check it over" />
+        <Panel className="animate-rise space-y-4">
+          {review.transcript && (
+            <p className="rounded-xl bg-raised px-4 py-3 text-sm text-muted">
+              <Icon name="wave" className="mr-2 inline size-4 text-accent" />"{review.transcript}"
+            </p>
+          )}
+          <p className="text-sm text-muted">Fix anything Sonic got wrong, then save.</p>
+          <WorkoutEditor
+            workout={review.workout}
+            metric={review.metric}
+            unit={weightUnit}
+            allowMetric
+            exerciseNames={exerciseNames}
+            saveLabel="Save"
+            saving={busy === "saving"}
+            error={error}
+            onSave={confirm}
+            onCancel={() => {
+              setReview(null);
+              setError(null);
+            }}
+          />
+        </Panel>
+      </div>
+    );
+  }
+
   const listening = voice.state === "listening" || voice.state === "recording";
   const statusText =
     busy === "transcribing"
-      ? "Transcribing and logging…"
+      ? "Transcribing…"
       : voice.state === "starting"
         ? "Starting microphone…"
         : voice.state === "listening"
@@ -210,7 +271,7 @@ export default function LogPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <Header />
+      <Header title="What did you train?" />
 
       <Panel className="p-0 sm:p-0">
         <div className="flex flex-col items-center px-5 pt-10 pb-8">
@@ -223,7 +284,7 @@ export default function LogPage() {
             )}
             <button
               onClick={toggleMic}
-              disabled={!voice.supported || busy === "transcribing" || busy === "logging"}
+              disabled={!voice.supported || busy === "transcribing" || busy === "reading"}
               aria-label={voice.active ? "Stop" : voice.mode === "record" ? "Start recording" : "Start listening"}
               aria-pressed={voice.active}
               className={cx(
@@ -268,7 +329,7 @@ export default function LogPage() {
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit();
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) readText();
             }}
             rows={4}
             maxLength={5000}
@@ -296,16 +357,16 @@ export default function LogPage() {
             Clear
           </Button>
           <Button variant="ghost" onClick={saveForLater} disabled={!text.trim() || !!busy}>
-            {busy === "saving" ? "Saving…" : "Save for later"}
+            {busy === "drafting" ? "Saving…" : "Save for later"}
           </Button>
-          <Button variant="primary" size="lg" className="ml-auto" onClick={submit} disabled={!text.trim() || !!busy}>
-            {busy === "logging" ? (
+          <Button variant="primary" size="lg" className="ml-auto" onClick={readText} disabled={!text.trim() || !!busy}>
+            {busy === "reading" ? (
               <>
-                <Spinner className="size-4" /> Logging…
+                <Spinner className="size-4" /> Reading…
               </>
             ) : (
               <>
-                Log it <Icon name="arrow" className="size-4" />
+                Review <Icon name="arrow" className="size-4" />
               </>
             )}
           </Button>
@@ -342,19 +403,41 @@ export default function LogPage() {
         )}
       </div>
 
+      {recent.length > 0 && (
+        <section>
+          <h2 className="eyebrow mb-3">Or repeat a recent workout</h2>
+          <div className="grid gap-2 sm:grid-cols-3">
+            {recent.map((log) => (
+              <button
+                key={log.id}
+                onClick={() => setReview({ transcript: null, workout: workoutToDraft(log, true), metric: null })}
+                className="panel cursor-pointer p-4 text-left transition-colors hover:border-faint"
+              >
+                <div className="text-xs text-faint">{formatDay(log.date)}</div>
+                <div className="mt-1 line-clamp-2 text-sm font-medium">{log.exercises.map((e) => e.name).join(", ")}</div>
+                <div className="mt-2 inline-flex items-center gap-1 text-xs text-accent">
+                  Repeat today <Icon name="arrow" className="size-3.5" />
+                </div>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
       <p className="text-center text-xs text-faint">
-        Say the exercise, sets, reps and weight. Add "yesterday" or a day to log the past. Units can be kilos or pounds.
-        {" "}<kbd className="rounded border border-line px-1">⌘</kbd> + <kbd className="rounded border border-line px-1">Enter</kbd> logs.
+        Say the exercise, sets, reps and weight. Add "yesterday" or a day to log the past. You'll check it before it's
+        saved. <kbd className="rounded border border-line px-1">⌘</kbd> +{" "}
+        <kbd className="rounded border border-line px-1">Enter</kbd> reviews.
       </p>
     </div>
   );
 }
 
-function Header() {
+function Header({ title }: { title: string }) {
   return (
     <header>
       <p className="eyebrow">Voice log</p>
-      <h1 className="mt-2 font-display text-3xl font-bold tracking-tight sm:text-4xl">What did you train?</h1>
+      <h1 className="mt-2 font-display text-3xl font-bold tracking-tight sm:text-4xl">{title}</h1>
     </header>
   );
 }

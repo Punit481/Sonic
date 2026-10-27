@@ -12,6 +12,7 @@ import {
   formatDay,
   formatMinutes,
   formatNumber,
+  formatWeight,
   latestWithChange,
   metricSeries,
   sessionVolume,
@@ -20,6 +21,7 @@ import {
   windowStats,
   type MetricKey,
 } from "../lib/stats";
+import { displayWeight, fromKg } from "../lib/units";
 import { useUserStore } from "../stores/userStore";
 
 const greeting = () => {
@@ -64,7 +66,7 @@ const METRICS: { value: MetricKey; label: string; unit: string; color: string }[
 
 export default function OverviewPage() {
   const { user } = useUser();
-  const { logs, metrics, status } = useUserStore();
+  const { logs, metrics, status, weightUnit: unit } = useUserStore();
   const [metric, setMetric] = useState<MetricKey>("weight");
   const exercises = useMemo(() => exerciseSummaries(logs), [logs]);
   const [chosenExercise, setChosenExercise] = useState<string | null>(null);
@@ -72,13 +74,23 @@ export default function OverviewPage() {
 
   const thisWeek = useMemo(() => windowStats(logs, 7), [logs]);
   const lastWeek = useMemo(() => windowStats(logs, 7, 7), [logs]);
-  const weeks = useMemo(() => weeklyTotals(logs, 8), [logs]);
+  const weeks = useMemo(
+    () => weeklyTotals(logs, 8).map((w) => ({ ...w, volume: Math.round(fromKg(w.volume, unit)) })),
+    [logs, unit]
+  );
   const streak = useMemo(() => weekStreak(logs), [logs]);
   const grid = useMemo(() => activityGrid(logs, 20), [logs]);
-  const progress = useMemo(() => (exercise ? exerciseProgress(logs, exercise) : null), [logs, exercise]);
+  const progress = useMemo(() => {
+    if (!exercise) return null;
+    const p = exerciseProgress(logs, exercise);
+    return p.unit === "kg" ? { ...p, unit, points: p.points.map((pt) => ({ ...pt, value: displayWeight(pt.value, unit) })) } : p;
+  }, [logs, exercise, unit]);
   const metricInfo = METRICS.find((m) => m.value === metric)!;
-  const series = useMemo(() => metricSeries(metrics, metric, 90), [metrics, metric]);
-  const weight = latestWithChange(metricSeries(metrics, "weight", 30));
+  const series = useMemo(() => {
+    const points = metricSeries(metrics, metric, 90);
+    return metric === "bodyFat" ? points : points.map((p) => ({ ...p, value: displayWeight(p.value, unit) }));
+  }, [metrics, metric, unit]);
+  const weight = latestWithChange(metricSeries(metrics, "weight", 30).map((p) => ({ ...p, value: fromKg(p.value, unit) })));
 
   if (status === "loading" || status === "idle") {
     return (
@@ -125,8 +137,8 @@ export default function OverviewPage() {
             <StatTile
               icon="dumbbell"
               label="Volume · 7 days"
-              value={formatNumber(thisWeek.volume)}
-              unit="kg"
+              value={formatNumber(fromKg(thisWeek.volume, unit))}
+              unit={unit}
               footer={<Delta now={thisWeek.volume} before={lastWeek.volume} />}
             />
             <StatTile
@@ -150,13 +162,13 @@ export default function OverviewPage() {
               icon="scale"
               label="Body weight"
               value={weight ? formatNumber(weight.latest, 1) : "—"}
-              unit={weight ? "kg" : undefined}
+              unit={weight ? unit : undefined}
               footer={
                 weight?.change != null ? (
                   <span className="text-faint">
                     <span className="text-ink/80">
                       {weight.change > 0 ? "+" : ""}
-                      {formatNumber(weight.change, 1)} kg
+                      {formatNumber(weight.change, 1)} {unit}
                     </span>{" "}
                     in 30 days
                   </span>
@@ -170,7 +182,7 @@ export default function OverviewPage() {
           <div className="grid gap-6 lg:grid-cols-5">
             <Panel className="lg:col-span-3">
               <PanelHeader title="Weekly volume" hint="Total kilograms lifted, last 8 weeks" />
-              <VolumeBars data={weeks} />
+              <VolumeBars data={weeks} unit={unit} />
             </Panel>
             <Panel className="lg:col-span-2">
               <PanelHeader title="Recent workouts" action={<Link to="/app/history" className="text-sm text-muted hover:text-ink">See all</Link>} />
@@ -188,7 +200,7 @@ export default function OverviewPage() {
                         <div className="text-xs text-muted">{formatDay(log.date)}</div>
                       </div>
                       {sessionVolume(log) > 0 && (
-                        <span className="num text-sm text-muted">{formatNumber(sessionVolume(log))} kg</span>
+                        <span className="num text-sm text-muted">{formatWeight(sessionVolume(log), unit, 0)}</span>
                       )}
                     </Link>
                   </li>
@@ -202,7 +214,18 @@ export default function OverviewPage() {
             <Panel>
               <PanelHeader
                 title="Exercise progress"
-                hint={progress ? `${progress.label} per session (${progress.unit})` : "Log a few sessions to see a trend"}
+                hint={
+                  progress && exercise ? (
+                    <>
+                      {progress.label} per session ({progress.unit}) ·{" "}
+                      <Link to={`/app/exercises/${encodeURIComponent(exercise)}`} className="text-ink/80 hover:text-accent">
+                        Records & history
+                      </Link>
+                    </>
+                  ) : (
+                    "Log a few sessions to see a trend"
+                  )
+                }
                 action={
                   exercises.length > 0 && (
                     <div className="relative">
@@ -239,7 +262,7 @@ export default function OverviewPage() {
                 action={<Segmented label="Measurement" value={metric} options={METRICS} onChange={setMetric} />}
               />
               {series.length > 1 ? (
-                <TrendLine points={series} unit={metricInfo.unit} color={metricInfo.color} />
+                <TrendLine points={series} unit={metric === "bodyFat" ? "%" : unit} color={metricInfo.color} />
               ) : (
                 <EmptyState icon="scale" title={`No ${metricInfo.label.toLowerCase()} trend yet`}>
                   Mention it when you log, e.g. "{metric === "bodyFat" ? "body fat is 18 percent" : metric === "muscleMass" ? "muscle mass 35 kilos" : "I weigh 78 kilos"}".

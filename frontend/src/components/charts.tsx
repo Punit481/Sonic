@@ -26,7 +26,7 @@ function TooltipBox({ title, value }: { title: string; value: string }) {
   );
 }
 
-export function VolumeBars({ data }: { data: WeekBucket[] }) {
+export function VolumeBars({ data, unit = "kg" }: { data: WeekBucket[]; unit?: string }) {
   const last = data.length - 1;
   return (
     <div className="h-56">
@@ -48,7 +48,7 @@ export function VolumeBars({ data }: { data: WeekBucket[] }) {
               return active && week ? (
                 <TooltipBox
                   title={`Week of ${week.label} · ${week.sessions} session${week.sessions === 1 ? "" : "s"}`}
-                  value={`${formatNumber(week.volume)} kg`}
+                  value={`${formatNumber(week.volume)} ${unit}`}
                 />
               ) : null;
             }}

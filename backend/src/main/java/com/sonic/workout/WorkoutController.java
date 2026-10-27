@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -30,8 +31,15 @@ class WorkoutController {
     @PostMapping
     ResponseEntity<WorkoutSession> create(
             @AuthenticationPrincipal CurrentUser user, @Valid @RequestBody NewWorkout workout) {
-        WorkoutSession created = workouts.create(user.id(), workout, false);
+        WorkoutSession created = workouts.create(user.id(), workout, false).workout();
         return ResponseEntity.created(URI.create("/api/v1/workouts/" + created.id())).body(created);
+    }
+
+    /** Replaces the workout, including all of its exercises and sets. Returns any records it now sets. */
+    @PutMapping("/{id}")
+    ResponseEntity<WorkoutService.Saved> update(
+            @AuthenticationPrincipal CurrentUser user, @PathVariable UUID id, @Valid @RequestBody NewWorkout workout) {
+        return ResponseEntity.of(workouts.update(user.id(), id, workout));
     }
 
     @GetMapping

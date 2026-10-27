@@ -1,11 +1,32 @@
 import { useAuth } from "@clerk/clerk-react";
 import { useEffect, useMemo, useState } from "react";
-import { useLocation } from "react-router";
+import { Link, useLocation } from "react-router";
 import { Icon } from "../components/Icon";
+import Records from "../components/Records";
 import { Banner, Button, CategoryDot, EmptyState, LinkButton, Panel, Segmented, Spinner } from "../components/ui";
-import { deleteBodyMetric, deleteWorkout, errorMessage } from "../lib/api";
+import WorkoutEditor from "../components/WorkoutEditor";
+import {
+  deleteBodyMetric,
+  deleteWorkout,
+  errorMessage,
+  updateWorkout,
+  type DraftWorkout,
+  type PersonalRecord,
+  type WeightUnit,
+} from "../lib/api";
 import { cx } from "../lib/cx";
-import { describeSets, formatDay, formatMinutes, formatNumber, sessionCardioMinutes, sessionVolume } from "../lib/stats";
+import { displayWeight } from "../lib/units";
+import { workoutToDraft } from "../lib/drafts";
+import {
+  describeSets,
+  exerciseSummaries,
+  formatDay,
+  formatMinutes,
+  formatNumber,
+  formatWeight,
+  sessionCardioMinutes,
+  sessionVolume,
+} from "../lib/stats";
 import type { Metric, WorkoutLog } from "../stores/types";
 import { useUserStore } from "../stores/userStore";
 
@@ -62,13 +83,27 @@ function DeleteButton({ onConfirm, label }: { onConfirm: () => Promise<void>; la
   );
 }
 
-function WorkoutCard({ log, highlighted, onDelete }: { log: WorkoutLog; highlighted: boolean; onDelete: () => Promise<void> }) {
+interface CardProps {
+  log: WorkoutLog;
+  unit: WeightUnit;
+  highlighted: boolean;
+  exerciseNames: string[];
+  onDelete: () => Promise<void>;
+  onSave: (workout: DraftWorkout) => Promise<PersonalRecord[]>;
+}
+
+function WorkoutCard({ log, unit, highlighted, exerciseNames, onDelete, onSave }: CardProps) {
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [records, setRecords] = useState<PersonalRecord[]>([]);
   const volume = sessionVolume(log);
   const cardio = sessionCardioMinutes(log);
+
   return (
     <article
       id={log.id}
-      className={cx("panel scroll-mt-24 p-5 transition-colors", highlighted && "border-accent/50")}
+      className={cx("panel scroll-mt-24 p-5 transition-colors", (highlighted || editing) && "border-accent/50")}
     >
       <header className="flex items-start justify-between gap-3">
         <div>
@@ -76,7 +111,7 @@ function WorkoutCard({ log, highlighted, onDelete }: { log: WorkoutLog; highligh
           <p className="mt-0.5 text-sm text-muted">
             {[
               `${log.exercises.length} exercise${log.exercises.length === 1 ? "" : "s"}`,
-              volume > 0 && `${formatNumber(volume)} kg volume`,
+              volume > 0 && `${formatWeight(volume, unit, 0)} volume`,
               cardio > 0 && `${formatMinutes(cardio)} cardio`,
               log.duration && `${formatMinutes(log.duration * 60)} total`,
             ]
@@ -84,32 +119,92 @@ function WorkoutCard({ log, highlighted, onDelete }: { log: WorkoutLog; highligh
               .join(" · ")}
           </p>
         </div>
-        <DeleteButton label="Delete workout" onConfirm={onDelete} />
+        {!editing && (
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => {
+                setEditing(true);
+                setRecords([]);
+              }}
+              aria-label="Edit workout"
+              className="grid size-8 cursor-pointer place-items-center rounded-lg text-faint transition-colors hover:bg-raised hover:text-ink"
+            >
+              <Icon name="edit" className="size-4" />
+            </button>
+            <DeleteButton label="Delete workout" onConfirm={onDelete} />
+          </div>
+        )}
       </header>
-      {log.note && <p className="mt-3 text-sm text-ink/80 italic">"{log.note}"</p>}
-      <ul className="mt-4 space-y-2.5">
-        {log.exercises.map((e) => (
-          <li key={e.id} className="flex items-start gap-3">
-            <span className="mt-[7px]">
-              <CategoryDot category={e.category} />
-            </span>
-            <div className="min-w-0 flex-1 sm:flex sm:items-baseline sm:gap-3">
-              <span className="font-medium sm:w-48 sm:shrink-0">{e.name}</span>
-              <span className="block text-sm text-muted">{describeSets(e.sets).join(" · ")}</span>
+
+      {editing ? (
+        <div className="mt-4">
+          <WorkoutEditor
+            workout={workoutToDraft(log)}
+            unit={unit}
+            exerciseNames={exerciseNames}
+            saveLabel="Save changes"
+            saving={saving}
+            error={error}
+            onCancel={() => {
+              setEditing(false);
+              setError(null);
+            }}
+            onSave={async ({ workout }) => {
+              if (!workout) {
+                setError("A workout needs at least one exercise. To remove it, delete the workout instead.");
+                return;
+              }
+              setSaving(true);
+              setError(null);
+              try {
+                setRecords(await onSave(workout));
+                setEditing(false);
+              } catch (e) {
+                setError(errorMessage(e));
+              } finally {
+                setSaving(false);
+              }
+            }}
+          />
+        </div>
+      ) : (
+        <>
+          {records.length > 0 && (
+            <div className="mt-4">
+              <Records records={records} unit={unit} />
             </div>
-          </li>
-        ))}
-      </ul>
+          )}
+          {log.note && <p className="mt-3 text-sm text-ink/80 italic">"{log.note}"</p>}
+          <ul className="mt-4 space-y-2.5">
+            {log.exercises.map((e) => (
+              <li key={e.id} className="flex items-start gap-3">
+                <span className="mt-[7px]">
+                  <CategoryDot category={e.category} />
+                </span>
+                <div className="min-w-0 flex-1 sm:flex sm:items-baseline sm:gap-3">
+                  <Link
+                    to={`/app/exercises/${encodeURIComponent(e.name)}`}
+                    className="font-medium hover:text-accent sm:w-48 sm:shrink-0"
+                  >
+                    {e.name}
+                  </Link>
+                  <span className="block text-sm text-muted">{describeSets(e.sets, unit).join(" · ")}</span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </article>
   );
 }
 
-function MetricRow({ metric, onDelete }: { metric: Metric; onDelete: () => Promise<void> }) {
-  const cell = (value: number | null | undefined, unit: string) =>
+function MetricRow({ metric, unit, onDelete }: { metric: Metric; unit: WeightUnit; onDelete: () => Promise<void> }) {
+  const cell = (value: number | null | undefined, suffix: string) =>
     value != null ? (
       <span className="num">
-        {formatNumber(value, 1)}
-        <span className="ml-0.5 text-xs text-muted">{unit}</span>
+        {formatNumber(suffix === "%" ? value : displayWeight(value, unit), 1)}
+        <span className="ml-0.5 text-xs text-muted">{suffix === "%" ? "%" : unit}</span>
       </span>
     ) : (
       <span className="text-faint">—</span>
@@ -129,7 +224,8 @@ function MetricRow({ metric, onDelete }: { metric: Metric; onDelete: () => Promi
 
 export default function HistoryPage() {
   const { getToken } = useAuth();
-  const { logs, metrics, status, removeLog, removeMetric } = useUserStore();
+  const { logs, metrics, status, removeLog, removeMetric, replaceLog, weightUnit } = useUserStore();
+  const exerciseNames = useMemo(() => exerciseSummaries(logs).map((e) => e.name), [logs]);
   const [tab, setTab] = useState<"workouts" | "body">("workouts");
   const [error, setError] = useState<string | null>(null);
   const { hash } = useLocation();
@@ -201,11 +297,18 @@ export default function HistoryPage() {
                     <WorkoutCard
                       key={log.id}
                       log={log}
+                      unit={weightUnit}
+                      exerciseNames={exerciseNames}
                       highlighted={log.id === target}
                       onDelete={remove(async () => {
                         await deleteWorkout(await getToken(), log.id);
                         removeLog(log.id);
                       })}
+                      onSave={async (workout) => {
+                        const saved = await updateWorkout(await getToken(), log.id, workout);
+                        replaceLog(saved.workout);
+                        return saved.records;
+                      }}
                     />
                   ))}
                 </div>
@@ -241,6 +344,7 @@ export default function HistoryPage() {
                 <MetricRow
                   key={m.id}
                   metric={m}
+                  unit={weightUnit}
                   onDelete={remove(async () => {
                     await deleteBodyMetric(await getToken(), m.id);
                     removeMetric(m.id);

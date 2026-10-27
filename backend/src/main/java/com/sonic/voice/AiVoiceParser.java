@@ -1,7 +1,6 @@
 package com.sonic.voice;
 
 import com.sonic.common.AiErrors;
-import java.time.LocalDate;
 import org.springframework.ai.audio.transcription.AudioTranscriptionPrompt;
 import org.springframework.ai.audio.transcription.TranscriptionModel;
 import org.springframework.ai.chat.client.ChatClient;
@@ -30,11 +29,14 @@ class AiVoiceParser implements VoiceParser {
     }
 
     @Override
-    public ParsedVoiceLog parseText(String transcript, LocalDate today) {
+    public ParsedVoiceLog parseText(String transcript, Context context) {
+        String known = context.knownExercises().isEmpty() ? "(none yet)" : String.join(", ", context.knownExercises());
         try {
             return chat.prompt()
                     .user(user -> user.text(prompt)
-                            .param("today", today.toString())
+                            .param("today", context.today().toString())
+                            .param("weightUnit", "lb".equals(context.weightUnit()) ? "pounds" : "kilograms")
+                            .param("knownExercises", known)
                             .param("input", transcript))
                     .call()
                     .entity(ParsedVoiceLog.class);

@@ -7,6 +7,8 @@ import { clerkAppearance } from "./clerkAppearance";
 import AppLayout from "./components/AppLayout";
 import { SignInPage, SignUpPage } from "./pages/AuthPages";
 import HistoryPage from "./pages/HistoryPage";
+import ExercisePage from "./pages/ExercisePage";
+import ExercisesPage from "./pages/ExercisesPage";
 import InsightsPage from "./pages/InsightsPage";
 import Landing from "./pages/Landing";
 import LogPage from "./pages/LogPage";
@@ -36,6 +38,8 @@ createRoot(document.getElementById("root")!).render(
             <Route index element={<OverviewPage />} />
             <Route path="log" element={<LogPage />} />
             <Route path="history" element={<HistoryPage />} />
+            <Route path="exercises" element={<ExercisesPage />} />
+            <Route path="exercises/:name" element={<ExercisePage />} />
             <Route path="insights" element={<InsightsPage />} />
           </Route>
           {/* Old paths */}

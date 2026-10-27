@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { Metric, WorkoutLog } from "./types";
 import {
+  type WeightUnit,
   errorMessage,
   fetchBodyMetrics,
   fetchDraft,
@@ -16,6 +17,7 @@ interface UserStore {
   metrics: Metric[];
   draft: string;
   isPremium: boolean;
+  weightUnit: WeightUnit;
   status: "idle" | "loading" | "ready" | "error";
   error: string | null;
 
@@ -24,6 +26,8 @@ interface UserStore {
   addMetric: (metric: Metric) => void;
   removeLog: (id: string) => void;
   removeMetric: (id: string) => void;
+  replaceLog: (log: WorkoutLog) => void;
+  setWeightUnit: (unit: WeightUnit) => void;
   setDraft: (text: string) => void;
   clear: () => void;
 }
@@ -33,6 +37,7 @@ export const useUserStore = create<UserStore>((set) => ({
   metrics: [],
   draft: "",
   isPremium: false,
+  weightUnit: "kg",
   status: "idle",
   error: null,
 
@@ -50,6 +55,7 @@ export const useUserStore = create<UserStore>((set) => ({
         metrics: metrics.items,
         draft,
         isPremium: me.isPremium,
+        weightUnit: me.weightUnit ?? "kg",
         status: "ready",
       });
     } catch (error) {
@@ -63,7 +69,10 @@ export const useUserStore = create<UserStore>((set) => ({
   removeLog: (id) => set((s) => ({ logs: s.logs.filter((l) => l.id !== id) })),
   removeMetric: (id) =>
     set((s) => ({ metrics: s.metrics.filter((m) => m.id !== id) })),
+  replaceLog: (log) =>
+    set((s) => ({ logs: s.logs.map((l) => (l.id === log.id ? log : l)).sort(byDateDesc) })),
+  setWeightUnit: (weightUnit) => set({ weightUnit }),
   setDraft: (draft) => set({ draft }),
   clear: () =>
-    set({ logs: [], metrics: [], draft: "", isPremium: false, status: "idle", error: null }),
+    set({ logs: [], metrics: [], draft: "", isPremium: false, weightUnit: "kg", status: "idle", error: null }),
 }));
