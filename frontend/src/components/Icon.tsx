@@ -20,6 +20,7 @@ const paths = {
   keyboard: "M3 7a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1Z M7 10h.01 M11 10h.01 M15 10h.01 M7 14h10",
   wave: "M4 10v4 M8 7v10 M12 4v16 M16 8v8 M20 11v2",
   clock: "M12 7v5l3 2 M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z",
+  download: "M12 4v11 M7 10l5 5 5-5 M5 20h14",
   edit: "M4 20h4L19 9l-4-4L4 16Z M13.5 6.5l4 4",
   repeat: "M17 2l4 4-4 4 M3 11V9a3 3 0 0 1 3-3h15 M7 22l-4-4 4-4 M21 13v2a3 3 0 0 1-3 3H3",
   trophy: "M8 21h8 M12 17v4 M7 4h10v5a5 5 0 0 1-10 0Z M17 6h3v2a3 3 0 0 1-3 3 M7 6H4v2a3 3 0 0 0 3 3",
