@@ -3,10 +3,12 @@ package com.sonic.insight;
 import com.sonic.common.AiRateLimiter;
 import com.sonic.common.ApiException;
 import com.sonic.config.SonicProperties;
+import com.sonic.goal.GoalService;
 import com.sonic.insight.InsightRepository.StoredInsight;
 import jakarta.validation.Validator;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -21,6 +23,7 @@ class InsightService {
     private final InsightRepository insights;
     private final TrainingSummaryRepository training;
     private final InsightGenerator generator;
+    private final GoalService goals;
     private final AiRateLimiter rateLimiter;
     private final Validator validator;
     private final SonicProperties.Insights config;
@@ -30,6 +33,7 @@ class InsightService {
             InsightRepository insights,
             TrainingSummaryRepository training,
             InsightGenerator generator,
+            GoalService goals,
             AiRateLimiter rateLimiter,
             Validator validator,
             SonicProperties properties,
@@ -37,6 +41,7 @@ class InsightService {
         this.insights = insights;
         this.training = training;
         this.generator = generator;
+        this.goals = goals;
         this.rateLimiter = rateLimiter;
         this.validator = validator;
         this.config = properties.insights();
@@ -76,7 +81,8 @@ class InsightService {
         rateLimiter.consume(userId);
 
         Instant now = clock.instant();
-        TrainingSummary summary = training.summarize(userId, now, config.lookback());
+        TrainingSummary summary = training.summarize(userId, now, config.lookback())
+                .withGoals(goals.describeActive(userId, ZoneOffset.UTC));
         if (summary.totalSessions() == 0) {
             throw ApiException.notEnoughData(
                     "No workouts in the last %d days.".formatted(config.lookback().toDays()));

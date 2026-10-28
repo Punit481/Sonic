@@ -2,6 +2,8 @@ package com.sonic.voice;
 
 import com.sonic.common.AiRateLimiter;
 import com.sonic.common.ApiException;
+import com.sonic.goal.Goal;
+import com.sonic.goal.GoalService;
 import com.sonic.metric.BodyMetric;
 import com.sonic.metric.BodyMetricService;
 import com.sonic.metric.NewBodyMetric;
@@ -17,6 +19,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
@@ -39,6 +42,7 @@ public class VoiceLogService {
     private final WorkoutService workouts;
     private final BodyMetricService metrics;
     private final UserRepository users;
+    private final GoalService goals;
     private final AiRateLimiter rateLimiter;
     private final Validator validator;
     private final TransactionTemplate transaction;
@@ -49,6 +53,7 @@ public class VoiceLogService {
             WorkoutService workouts,
             BodyMetricService metrics,
             UserRepository users,
+            GoalService goals,
             AiRateLimiter rateLimiter,
             Validator validator,
             TransactionTemplate transaction,
@@ -57,6 +62,7 @@ public class VoiceLogService {
         this.workouts = workouts;
         this.metrics = metrics;
         this.users = users;
+        this.goals = goals;
         this.rateLimiter = rateLimiter;
         this.validator = validator;
         this.transaction = transaction;
@@ -68,7 +74,11 @@ public class VoiceLogService {
 
     /** {@code transcript} is what the user said; for audio input it is the speech-to-text result. */
     public record VoiceLogResult(
-            String transcript, WorkoutSession workout, BodyMetric metric, List<PersonalRecord> records) {}
+            String transcript,
+            WorkoutSession workout,
+            BodyMetric metric,
+            List<PersonalRecord> records,
+            List<Goal> goalsReached) {}
 
     public VoiceDraft parseText(UUID userId, String transcript, ZoneId zone) {
         return parse(userId, zone, () -> transcript);
@@ -95,7 +105,8 @@ public class VoiceLogService {
                     draft.transcript(),
                     saved == null ? null : saved.workout(),
                     metric,
-                    saved == null ? List.of() : saved.records());
+                    saved == null ? List.of() : saved.records(),
+                    goals.checkAchieved(userId, ZoneOffset.UTC));
         });
     }
 

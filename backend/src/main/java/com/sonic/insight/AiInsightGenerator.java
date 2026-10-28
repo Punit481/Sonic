@@ -73,7 +73,8 @@ class AiInsightGenerator implements InsightGenerator {
                             .param("topExercises", topExercises.isEmpty() ? "- none" : topExercises)
                             .param("previousTwoWeeks", s.previousTwoWeeks())
                             .param("lastTwoWeeks", s.lastTwoWeeks())
-                            .param("bodyComposition", bodyComposition.isEmpty() ? "- No body metrics tracked" : bodyComposition))
+                            .param("bodyComposition", bodyComposition.isEmpty() ? "- No body metrics tracked" : bodyComposition)
+                            .param("goals", s.goals().isEmpty() ? "- No goals set" : String.join("\n", s.goals())))
                     .call()
                     .entity(Insight.Content.class);
         } catch (RuntimeException ex) {

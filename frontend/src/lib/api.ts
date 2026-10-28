@@ -118,11 +118,32 @@ export interface PersonalRecord {
   previous: number;
 }
 
+export type GoalType = "lift_weight" | "exercise_reps" | "body_weight" | "weekly_workouts";
+export type GoalStatus = "achieved" | "met" | "on_track" | "behind" | "missed" | "in_progress";
+
+/** A goal with its progress. Weights in kg; `percent` is 0-1 from `startValue` to `target`. */
+export interface Goal {
+  id: string;
+  type: GoalType;
+  exercise: string | null;
+  target: number;
+  startValue: number | null;
+  current: number | null;
+  percent: number;
+  deadline: string | null;
+  createdAt: string;
+  achievedAt: string | null;
+  status: GoalStatus;
+  projectedDate: string | null;
+  streakWeeks: number | null;
+}
+
 export interface VoiceLogResult {
   transcript: string | null;
   workout: WorkoutLog | null;
   metric: Metric | null;
   records: PersonalRecord[];
+  goalsReached: Goal[];
 }
 
 /** All-time bests for one exercise. Weights in kg, distance in km, duration in hours. */
@@ -237,6 +258,22 @@ export const downloadExport = async (token: string | null | undefined, kind: "wo
   link.click();
   URL.revokeObjectURL(link.href);
 };
+
+export const fetchGoals = (token?: string | null) =>
+  request<Goal[]>(`/api/v1/goals?timeZone=${encodeURIComponent(userTimeZone())}`, token);
+
+/** `target` in kg for weight goals. */
+export const createGoal = (
+  token: string | null | undefined,
+  goal: { type: GoalType; exercise?: string | null; target: number; deadline?: string | null }
+) =>
+  request<Goal>("/api/v1/goals", token, {
+    method: "POST",
+    body: JSON.stringify({ ...goal, timeZone: userTimeZone() }),
+  });
+
+export const deleteGoal = (token: string | null | undefined, id: string) =>
+  request<void>(`/api/v1/goals/${id}`, token, { method: "DELETE" });
 
 export const fetchInsights = (token?: string | null) =>
   request<InsightStatus>("/api/v1/insights/latest", token);

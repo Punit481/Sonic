@@ -50,6 +50,23 @@ describe("logging a workout", () => {
       },
       metric: null,
       records: [{ exercise: "Bench Press", kind: "weight", value: 87.5, previous: 85 }],
+      goalsReached: [
+        {
+          id: "g1",
+          type: "lift_weight",
+          exercise: "Bench Press",
+          target: 87.5,
+          startValue: 80,
+          current: 87.5,
+          percent: 1,
+          deadline: null,
+          createdAt: "2026-10-01T00:00:00Z",
+          achievedAt: new Date().toISOString(),
+          status: "achieved",
+          projectedDate: null,
+          streakWeeks: null,
+        },
+      ],
     }));
     render(
       <MemoryRouter>
@@ -67,6 +84,8 @@ describe("logging a workout", () => {
     fireEvent.click(screen.getByRole("button", { name: /Save/ }));
 
     expect(await screen.findByText("New personal record!")).toBeInTheDocument();
+    expect(screen.getByText("Goal reached!")).toBeInTheDocument();
+    expect(screen.getByText("Bench Press 87.5 kg")).toBeInTheDocument();
     expect(vi.mocked(api.confirmVoiceLog).mock.calls[0][1].workout!.exercises[0].sets[0].weight).toBe(87.5);
     expect(useUserStore.getState().logs).toHaveLength(1);
   });

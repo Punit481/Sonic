@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { Link, useParams } from "react-router";
 import { TrendLine } from "../components/charts";
 import { Icon } from "../components/Icon";
-import { Banner, CategoryDot, EmptyState, Panel, PanelHeader, Spinner } from "../components/ui";
+import { Banner, CategoryDot, EmptyState, LinkButton, Panel, PanelHeader, Spinner } from "../components/ui";
 import { useExerciseStats } from "../hooks/useExerciseStats";
 import type { PersonalRecord } from "../lib/api";
 import { formatRecordValue, RECORD_LABEL } from "../lib/records";
@@ -64,9 +64,18 @@ export default function ExercisePage() {
           {exercise?.name ?? name}
         </h1>
         {exercise && (
-          <p className="mt-2 text-sm text-muted">
-            {exercise.sessions} session{exercise.sessions === 1 ? "" : "s"} · last {formatDay(exercise.lastPerformed)}
-          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
+            <p className="text-sm text-muted">
+              {exercise.sessions} session{exercise.sessions === 1 ? "" : "s"} · last {formatDay(exercise.lastPerformed)}
+            </p>
+            <LinkButton
+              size="sm"
+              icon="target"
+              to={`/app/goals?new=${exercise.bestWeight ? "lift_weight" : "exercise_reps"}&exercise=${encodeURIComponent(exercise.name)}`}
+            >
+              Set a goal
+            </LinkButton>
+          </div>
         )}
       </header>
 

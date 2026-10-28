@@ -82,11 +82,13 @@ Interactive docs run at `http://localhost:8080/swagger-ui` while the backend is 
 | GET / PUT / DELETE | `/api/v1/workout-draft` | The saved transcript |
 | POST | `/api/v1/voice-logs/parse` | `{ transcript, timeZone }` → what the AI understood, **not saved**, for the user to review |
 | POST | `/api/v1/voice-logs/audio/parse` | Multipart `file` (audio) → transcribed and parsed, not saved |
-| POST | `/api/v1/voice-logs/confirm` | Saves a reviewed (possibly edited) draft; returns the saved entries and any personal records |
+| POST | `/api/v1/voice-logs/confirm` | Saves a reviewed (possibly edited) draft; returns the saved entries, any personal records and any goals it reached |
 | POST | `/api/v1/voice-logs` | `{ transcript, timeZone }` → parsed and saved in one step |
 | POST | `/api/v1/voice-logs/audio` | Multipart `file` (audio) → transcribed, parsed and saved in one step |
 | GET | `/api/v1/insights/latest` | Latest insights and whether new ones can be generated |
 | POST | `/api/v1/insights` | Generate insights (needs 3+ workouts, once per 24h) |
+| GET / POST | `/api/v1/goals` | Goals with progress, status and projected finish date; POST `{ type, exercise?, target, deadline? }` (types: `lift_weight`, `exercise_reps`, `body_weight`, `weekly_workouts`) |
+| DELETE | `/api/v1/goals/{id}` | Remove a goal |
 | GET | `/api/v1/export/workouts.csv`, `/api/v1/export/body-metrics.csv` | All your data as CSV, weights in your unit, dates in `?timeZone` |
 | GET | `/actuator/health` | Health check (no auth) |
 

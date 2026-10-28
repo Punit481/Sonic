@@ -143,7 +143,8 @@ class TrainingSummaryRepository {
                 sessions.previousTwoWeeks(),
                 bodyChanges.get("weight"),
                 bodyChanges.get("fat"),
-                bodyChanges.get("muscle"));
+                bodyChanges.get("muscle"),
+                List.of());
     }
 
     private record SessionStats(int count, Instant firstSession, int lastTwoWeeks, int previousTwoWeeks) {}

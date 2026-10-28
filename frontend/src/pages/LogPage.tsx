@@ -1,6 +1,7 @@
 import { useAuth } from "@clerk/clerk-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../components/Icon";
+import { GoalsReached } from "../components/Goals";
 import Records from "../components/Records";
 import { Banner, Button, CategoryDot, LinkButton, Panel, Segmented, Spinner } from "../components/ui";
 import WorkoutEditor from "../components/WorkoutEditor";
@@ -45,6 +46,7 @@ function Result({ result, unit, onAgain }: { result: VoiceLogResult; unit: Weigh
         </div>
       </div>
 
+      <GoalsReached goals={result.goalsReached ?? []} unit={unit} />
       <Records records={result.records} unit={unit} />
 
       {workout && (
