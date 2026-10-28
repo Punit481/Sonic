@@ -1,5 +1,5 @@
 import { useAuth, UserButton } from "@clerk/clerk-react";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, Navigate, NavLink, Outlet } from "react-router";
 import { updateWeightUnit, type WeightUnit } from "../lib/api";
 import { cx } from "../lib/cx";
@@ -20,36 +20,60 @@ const nav: { to: string; label: string; icon: IconName; end?: boolean }[] = [
 function UnitToggle({ compact = false }: { compact?: boolean }) {
   const { getToken } = useAuth();
   const { weightUnit, setWeightUnit } = useUserStore();
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    if (!failed) return;
+    const t = window.setTimeout(() => setFailed(false), 4000);
+    return () => window.clearTimeout(t);
+  }, [failed]);
+
   const change = async (unit: WeightUnit) => {
     if (unit === weightUnit) return;
     setWeightUnit(unit);
+    setFailed(false);
     try {
       await updateWeightUnit(await getToken(), unit);
     } catch {
+      // Put it back and say so, rather than silently showing the old unit.
       setWeightUnit(weightUnit);
+      setFailed(true);
     }
   };
+
+  const problem = failed && (
+    <span role="alert" className="text-xs text-danger">
+      Couldn't save
+    </span>
+  );
+
   if (compact) {
     return (
-      <button
-        onClick={() => change(weightUnit === "kg" ? "lb" : "kg")}
-        aria-label={`Weight unit: ${weightUnit}. Switch to ${weightUnit === "kg" ? "lb" : "kg"}`}
-        className="h-8 cursor-pointer rounded-lg border border-line px-2.5 text-xs font-medium text-muted hover:text-ink"
-      >
-        {weightUnit}
-      </button>
+      <span className="flex items-center gap-2">
+        {problem}
+        <button
+          onClick={() => change(weightUnit === "kg" ? "lb" : "kg")}
+          aria-label={`Weight unit: ${weightUnit}. Switch to ${weightUnit === "kg" ? "lb" : "kg"}`}
+          className="h-8 cursor-pointer rounded-lg border border-line px-2.5 text-xs font-medium text-muted hover:text-ink"
+        >
+          {weightUnit}
+        </button>
+      </span>
     );
   }
   return (
-    <Segmented
-      label="Weight unit"
-      value={weightUnit}
-      onChange={change}
-      options={[
-        { value: "kg", label: "kg" },
-        { value: "lb", label: "lb" },
-      ]}
-    />
+    <span className="flex items-center gap-2">
+      {problem}
+      <Segmented
+        label="Weight unit"
+        value={weightUnit}
+        onChange={change}
+        options={[
+          { value: "kg", label: "kg" },
+          { value: "lb", label: "lb" },
+        ]}
+      />
+    </span>
   );
 }
 
