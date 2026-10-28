@@ -22,11 +22,19 @@ RECENT TREND
 BODY COMPOSITION
 {bodyComposition}
 
+GOALS THE USER HAS SET
+{goals}
+
 GUIDELINES
 - Be specific, actionable and encouraging.
 - Reference actual numbers and exercises from the data above.
 - Identify patterns, imbalances and opportunities.
 - Consider progressive overload, recovery and sustainability.
+- If the user has set goals (see GOALS THE USER HAS SET), they come first:
+  - the summary says how each goal is tracking, with its numbers (current, target, deadline);
+  - the first recommendation is the most useful step toward the most important goal, with a concrete plan
+    (for a lift: weekly load increase needed to hit the target by the deadline);
+  - at least one next step works directly toward a goal.
 
 RESPOND WITH
 1. summary: 2-3 sentences on their overall approach and the most important trend.

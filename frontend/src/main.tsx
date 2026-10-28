@@ -9,6 +9,7 @@ import { SignInPage, SignUpPage } from "./pages/AuthPages";
 import HistoryPage from "./pages/HistoryPage";
 import ExercisePage from "./pages/ExercisePage";
 import ExercisesPage from "./pages/ExercisesPage";
+import GoalsPage from "./pages/GoalsPage";
 import InsightsPage from "./pages/InsightsPage";
 import Landing from "./pages/Landing";
 import LogPage from "./pages/LogPage";
@@ -40,6 +41,7 @@ createRoot(document.getElementById("root")!).render(
             <Route path="history" element={<HistoryPage />} />
             <Route path="exercises" element={<ExercisesPage />} />
             <Route path="exercises/:name" element={<ExercisePage />} />
+            <Route path="goals" element={<GoalsPage />} />
             <Route path="insights" element={<InsightsPage />} />
           </Route>
           {/* Old paths */}

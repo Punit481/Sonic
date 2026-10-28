@@ -18,7 +18,15 @@ public record TrainingSummary(
         int previousTwoWeeks,
         String weightChange,
         String bodyFatChange,
-        String muscleMassChange) {
+        String muscleMassChange,
+        List<String> goals) {
 
     public record TopExercise(String name, int sessions, String category) {}
+
+    /** The user's active goals, one line each, so the coach can speak to them. */
+    TrainingSummary withGoals(List<String> goals) {
+        return new TrainingSummary(lookbackDays, trainingPeriodDays, totalSessions, sessionsPerWeek, totalVolumeKg,
+                cardioHours, strengthCount, cardioCount, mobilityCount, topExercises, lastTwoWeeks, previousTwoWeeks,
+                weightChange, bodyFatChange, muscleMassChange, goals);
+    }
 }

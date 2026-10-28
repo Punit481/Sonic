@@ -22,6 +22,10 @@ import {
   type MetricKey,
 } from "../lib/stats";
 import { displayWeight, fromKg } from "../lib/units";
+import { ProgressBar, StatusPill } from "../components/Goals";
+import { useGoals } from "../hooks/useGoals";
+import type { WeightUnit } from "../lib/api";
+import { goalTitle } from "../lib/goals";
 import { useUserStore } from "../stores/userStore";
 
 const greeting = () => {
@@ -55,6 +59,51 @@ function StatTile({ icon, label, value, unit, footer }: { icon: IconName; label:
       </div>
       <div className="mt-2 text-xs">{footer}</div>
     </div>
+  );
+}
+
+/** The nearest active goals at a glance, or a nudge to set one. */
+function GoalsPanel({ unit }: { unit: WeightUnit }) {
+  const { goals } = useGoals();
+  if (!goals) return null;
+  const active = goals.filter((g) => !g.achievedAt).slice(0, 3);
+  if (active.length === 0) {
+    return (
+      <Link
+        to="/app/goals"
+        className="panel flex items-center gap-4 p-5 transition-colors hover:border-faint"
+      >
+        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-raised text-accent">
+          <Icon name="target" />
+        </span>
+        <span className="flex-1">
+          <span className="block font-medium">Set a goal</span>
+          <span className="block text-sm text-muted">Bench 100 kg, train 4× a week, reach a weight: Sonic tracks it for you.</span>
+        </span>
+        <Icon name="arrow" className="size-4 text-faint" />
+      </Link>
+    );
+  }
+  return (
+    <Panel>
+      <PanelHeader title="Goals" action={<Link to="/app/goals" className="text-sm text-muted hover:text-ink">See all</Link>} />
+      <ul className="grid gap-5 md:grid-cols-3">
+        {active.map((g) => (
+          <li key={g.id}>
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="truncate text-sm font-medium">{goalTitle(g, unit)}</span>
+              <span className="num shrink-0 text-xs text-muted">{Math.round(g.percent * 100)}%</span>
+            </div>
+            <div className="mt-2">
+              <ProgressBar percent={g.percent} done={g.status === "met"} compact />
+            </div>
+            <div className="mt-1.5">
+              <StatusPill goal={g} />
+            </div>
+          </li>
+        ))}
+      </ul>
+    </Panel>
   );
 }
 
@@ -178,6 +227,8 @@ export default function OverviewPage() {
               }
             />
           </div>
+
+          <GoalsPanel unit={unit} />
 
           <div className="grid gap-6 lg:grid-cols-5">
             <Panel className="lg:col-span-3">

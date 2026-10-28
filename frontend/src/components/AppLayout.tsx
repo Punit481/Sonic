@@ -12,6 +12,7 @@ const nav: { to: string; label: string; icon: IconName; end?: boolean }[] = [
   { to: "/app/log", label: "Log", icon: "mic" },
   { to: "/app/history", label: "History", icon: "list" },
   { to: "/app/exercises", label: "Exercises", icon: "trophy" },
+  { to: "/app/goals", label: "Goals", icon: "target" },
   { to: "/app/insights", label: "Insights", icon: "spark" },
 ];
 
@@ -151,7 +152,7 @@ export default function AppLayout() {
       {/* Phone tab bar */}
       <nav
         aria-label="Main"
-        className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 border-t border-line bg-surface/95 px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur lg:hidden"
+        className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-6 border-t border-line bg-surface/95 px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur lg:hidden"
       >
         {nav.map((item) => (
           <NavLink
