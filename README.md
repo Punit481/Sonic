@@ -30,8 +30,8 @@ frontend/  React + TypeScript (Vite)  ──HTTPS + Clerk JWT──▶  backend/
                                                                  │
                                                   ┌──────────────┼───────────────┐
                                                   ▼              ▼               ▼
-                                             PostgreSQL     Google Gemini     Clerk JWKS
-                                           (JDBC + Flyway)  (Spring AI)    (token checks)
+                                             PostgreSQL    Groq: gpt-oss +    Clerk JWKS
+                                           (JDBC + Flyway)  Whisper (Spring AI) (token checks)
 ```
 
 ### Backend (`backend/`)
@@ -48,17 +48,17 @@ backend/src/main/java/com/sonic/
 ├── workout/     Workouts, exercises and sets (JDBC repository, nested batch inserts)
 ├── metric/      Body measurements
 ├── draft/       Saved, not-yet-logged transcript
-├── voice/       Voice logging: Gemini turns text or audio into workouts and metrics
-└── insight/     Coaching insights: SQL aggregation + Gemini, with a 24h cooldown
+├── voice/       Voice logging: Whisper transcribes audio, gpt-oss turns text into workouts and metrics
+└── insight/     Coaching insights: SQL aggregation + gpt-oss, with a 24h cooldown
 backend/src/main/resources/
 ├── application.yml
 ├── db/migration/V1__init.sql   Flyway schema
-└── prompts/                    Gemini prompt templates
+└── prompts/                    Prompt templates
 ```
 
 - **Data access:** plain SQL through Spring's `JdbcClient`, no ORM. Schema changes are Flyway migrations.
 - **Auth:** the frontend signs in with Clerk. The API verifies Clerk's JWT (signature, expiry, issuer and the `azp` origin) and creates the user row on their first request.
-- **AI:** Spring AI calls Gemini with a JSON schema generated from Java records, so responses come back as typed objects. The model's output is validated like any request body before it is saved.
+- **AI:** [Groq](https://groq.com)'s free tier through Spring AI's OpenAI client (Groq's API is OpenAI-compatible). Whisper turns recordings into text; OpenAI's open-weight gpt-oss-120b turns text into workouts and writes insights, following a JSON schema generated from Java records. The model's output is validated like any request body before it is saved. Any OpenAI-compatible provider works by changing `spring.ai.openai.base-url` and the model names.
 - **Errors:** every error is an [RFC 7807](https://www.rfc-editor.org/rfc/rfc7807) `application/problem+json` response with a stable `type`.
 
 ### Frontend (`frontend/`)
@@ -71,21 +71,26 @@ Interactive docs run at `http://localhost:8080/swagger-ui` while the backend is 
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/api/v1/me` | Current user, including `isPremium` |
+| GET / PATCH | `/api/v1/me` | Current user; PATCH sets `weightUnit` (`kg` or `lb`) |
 | GET | `/api/v1/workouts?page=1&size=20` | Workouts, newest first (size ≤ 100) |
 | POST | `/api/v1/workouts` | Log a workout |
-| GET / DELETE | `/api/v1/workouts/{id}` | One workout |
+| GET / PUT / DELETE | `/api/v1/workouts/{id}` | One workout. PUT replaces it, including all exercises and sets, and returns any new personal records |
+| GET | `/api/v1/exercises` | Every exercise logged, with all-time bests (heaviest set, estimated 1-rep max, most bodyweight reps, longest distance and time) |
 | GET | `/api/v1/body-metrics?page=1&size=50` | Body measurements, newest first |
 | POST | `/api/v1/body-metrics` | Log a measurement |
 | DELETE | `/api/v1/body-metrics/{id}` | Delete a measurement |
 | GET / PUT / DELETE | `/api/v1/workout-draft` | The saved transcript |
-| POST | `/api/v1/voice-logs` | `{ transcript, timeZone }` → saved workout and/or measurement |
-| POST | `/api/v1/voice-logs/audio` | Premium. Multipart `file` (audio) → transcribed and saved in one call |
+| POST | `/api/v1/voice-logs/parse` | `{ transcript, timeZone }` → what the AI understood, **not saved**, for the user to review |
+| POST | `/api/v1/voice-logs/audio/parse` | Multipart `file` (audio) → transcribed and parsed, not saved |
+| POST | `/api/v1/voice-logs/confirm` | Saves a reviewed (possibly edited) draft; returns the saved entries and any personal records |
+| POST | `/api/v1/voice-logs` | `{ transcript, timeZone }` → parsed and saved in one step |
+| POST | `/api/v1/voice-logs/audio` | Multipart `file` (audio) → transcribed, parsed and saved in one step |
 | GET | `/api/v1/insights/latest` | Latest insights and whether new ones can be generated |
 | POST | `/api/v1/insights` | Generate insights (needs 3+ workouts, once per 24h) |
+| GET | `/api/v1/export/workouts.csv`, `/api/v1/export/body-metrics.csv` | All your data as CSV, weights in your unit, dates in `?timeZone` |
 | GET | `/actuator/health` | Health check (no auth) |
 
-Units: weights in kg, distances in km, durations in hours. Voice and insight endpoints are limited to 30 AI calls per user per hour by default.
+Units: weights in kg, distances in km, durations in hours. Exercise names are stored in one canonical spelling (`bench` → `Bench Press`), so records and charts don't split. The `weightUnit` preference only changes display and what the AI assumes when no unit is said. Voice and insight endpoints are limited to 30 AI calls per user per hour by default.
 
 ## Getting Started
 
@@ -95,7 +100,7 @@ Units: weights in kg, distances in km, durations in hours. Voice and insight end
 - Node.js 20+ and npm
 - Docker, for the local Postgres database (or your own PostgreSQL 14+)
 - A [Clerk](https://clerk.com) application
-- A [Google AI Studio](https://aistudio.google.com) API key for Gemini
+- A free [Groq](https://console.groq.com/keys) API key (no card needed)
 
 ### 1. Configure Clerk
 
@@ -114,7 +119,7 @@ The API reads these claims when it creates a user. Without them it falls back to
 
 ```bash
 cd backend
-cp .env.example .env      # then fill in CLERK_ISSUER and GEMINI_API_KEY
+cp .env.example .env      # then fill in CLERK_ISSUER and GROQ_API_KEY
 ./mvnw spring-boot:run
 ```
 
@@ -130,6 +135,34 @@ npm run dev
 ```
 
 Open `http://localhost:5173`.
+
+### Day to day: one command
+
+After the first-time setup above, start everything with:
+
+```bash
+./dev.sh
+```
+
+It starts Docker if needed, checks your `.env` files, starts the database, backs it up once a day, runs the backend and frontend with labelled output (`api │`, `web │`), and opens http://localhost:5173. `Ctrl + C` stops everything.
+
+## Your data: backups and export
+
+Your data lives in a Docker volume on this machine, so keep backups.
+
+```bash
+scripts/backup.sh                 # back up now (dev.sh also does this once a day)
+scripts/restore.sh                # restore the newest backup (asks first, saves a safety backup)
+scripts/restore.sh <file>         # restore a specific backup
+```
+
+Backups are compressed SQL files in `~/Sonic-backups`; the newest 30 are kept. To keep copies off this machine, point them at a synced folder, for example in `~/.zshrc`:
+
+```bash
+export SONIC_BACKUP_DIR="$HOME/Library/Mobile Documents/com~apple~CloudDocs/Sonic-backups"
+```
+
+To get your data into a spreadsheet, use **Export CSV** on the History page (workouts, one row per set, or body measurements), or `GET /api/v1/export/workouts.csv` and `/api/v1/export/body-metrics.csv`.
 
 ## Deployment
 

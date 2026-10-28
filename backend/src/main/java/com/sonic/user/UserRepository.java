@@ -44,6 +44,13 @@ public class UserRepository {
         return findByClerkId(clerkId).orElseThrow();
     }
 
+    public void updateWeightUnit(UUID id, String weightUnit) {
+        jdbc.sql("update app_user set weight_unit = :unit where id = :id")
+                .param("unit", weightUnit)
+                .param("id", id)
+                .update();
+    }
+
     private static User mapRow(ResultSet rs, int rowNum) throws SQLException {
         return new User(
                 rs.getObject("id", UUID.class),
@@ -51,6 +58,7 @@ public class UserRepository {
                 rs.getString("email"),
                 rs.getString("name"),
                 rs.getBoolean("is_premium"),
+                rs.getString("weight_unit"),
                 rs.getTimestamp("created_at").toInstant());
     }
 }

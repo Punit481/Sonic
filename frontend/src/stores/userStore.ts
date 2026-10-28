@@ -1,93 +1,78 @@
 import { create } from "zustand";
-import type { UserStore } from "./types";
+import type { Metric, WorkoutLog } from "./types";
 import {
+  type WeightUnit,
+  errorMessage,
   fetchBodyMetrics,
   fetchDraft,
   fetchMe,
   fetchWorkouts,
 } from "../lib/api";
 
+const byDateDesc = <T extends { date: string | Date }>(a: T, b: T) =>
+  new Date(b.date).getTime() - new Date(a.date).getTime();
+
+interface UserStore {
+  logs: WorkoutLog[];
+  metrics: Metric[];
+  draft: string;
+  isPremium: boolean;
+  weightUnit: WeightUnit;
+  status: "idle" | "loading" | "ready" | "error";
+  error: string | null;
+
+  load: (token: string) => Promise<void>;
+  addLog: (log: WorkoutLog) => void;
+  addMetric: (metric: Metric) => void;
+  removeLog: (id: string) => void;
+  removeMetric: (id: string) => void;
+  replaceLog: (log: WorkoutLog) => void;
+  setWeightUnit: (unit: WeightUnit) => void;
+  setDraft: (text: string) => void;
+  clear: () => void;
+}
+
 export const useUserStore = create<UserStore>((set) => ({
-  user: null,
-  isLoggedIn: false,
   logs: [],
   metrics: [],
-  isLoading: false,
-  toProcess: "",
+  draft: "",
   isPremium: false,
+  weightUnit: "kg",
+  status: "idle",
+  error: null,
 
-  setUser: (user) => {
-    set({ user, isLoggedIn: user !== null });
-  },
-
-  setLoggedIn: (isLoggedIn) => {
-    set({ isLoggedIn });
-  },
-
-  setToProcess: (transcript) => {
-    set({ toProcess: transcript });
-  },
-
-  fetchMetrics: async (token?: string) => {
-    set({ isLoading: true });
+  load: async (token) => {
+    set({ status: "loading", error: null });
     try {
-      const page = await fetchBodyMetrics(token);
-      set({ isLoading: false, metrics: page.items });
+      const [workouts, metrics, draft, me] = await Promise.all([
+        fetchWorkouts(token),
+        fetchBodyMetrics(token),
+        fetchDraft(token),
+        fetchMe(token),
+      ]);
+      set({
+        logs: workouts.items,
+        metrics: metrics.items,
+        draft,
+        isPremium: me.isPremium,
+        weightUnit: me.weightUnit ?? "kg",
+        status: "ready",
+      });
     } catch (error) {
-      console.error("Error fetching metrics:", error);
-      set({ isLoading: false });
-    }
-  },
-  fetchToProcess: async (token?: string) => {
-    set({ isLoading: true });
-    try {
-      const toProcess = await fetchDraft(token);
-      set({ toProcess, isLoading: false });
-    } catch (error) {
-      console.error("Error fetching saved data:", error);
-      set({ isLoading: false });
-    }
-  },
-  fetchLogs: async (token?: string) => {
-    set({ isLoading: true });
-    try {
-      const page = await fetchWorkouts(token);
-      set({ logs: page.items, isLoading: false });
-    } catch (error) {
-      console.error("Error fetching logs:", error);
-      set({ isLoading: false });
-    }
-  },
-  fetchIsPremium: async (token?: string) => {
-    set({ isLoading: true });
-    try {
-      const me = await fetchMe(token);
-      set({ isPremium: me.isPremium, isLoading: false });
-    } catch (error) {
-      console.error("Error fetching user:", error);
-      set({ isLoading: false });
+      set({ status: "error", error: errorMessage(error) });
     }
   },
 
-  addLog: (log) => {
-    set((state) => ({ logs: [log, ...state.logs] }));
-  },
-
-  addMetric: (metric) => {
-    set((state) => ({ metrics: [metric, ...state.metrics] }));
-  },
-
-  setLoading: (loading) => {
-    set({ isLoading: loading });
-  },
-
-  clearStore: () => {
-    set({
-      user: null,
-      isLoggedIn: false,
-      logs: [],
-      metrics: [],
-      isLoading: false,
-    });
-  },
+  addLog: (log) => set((s) => ({ logs: [log, ...s.logs].sort(byDateDesc) })),
+  addMetric: (metric) =>
+    set((s) => ({ metrics: [metric, ...s.metrics].sort(byDateDesc) })),
+  removeLog: (id) => set((s) => ({ logs: s.logs.filter((l) => l.id !== id) })),
+  removeMetric: (id) =>
+    set((s) => ({ metrics: s.metrics.filter((m) => m.id !== id) })),
+  replaceLog: (log) =>
+    set((s) => ({ logs: s.logs.map((l) => (l.id === log.id ? log : l)).sort(byDateDesc) })),
+  setWeightUnit: (weightUnit) => set({ weightUnit }),
+  setDraft: (draft) => set({ draft }),
+  clear: () =>
+    set({ logs: [], metrics: [], draft: "", isPremium: false, weightUnit: "kg", status: "idle", error: null }),
 }));

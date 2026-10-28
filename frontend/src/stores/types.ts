@@ -1,66 +1,41 @@
-export interface User {
-  id: string;
-  fullName: string | null;
-  email: string;
-  avatar?: string;
-}
+// Shapes returned by the Sonic API. Dates arrive as ISO strings.
+
+export type ExerciseCategory = "strength" | "cardio" | "mobility" | "custom";
+export type Intensity = "easy" | "moderate" | "hard" | "max";
 
 export interface WorkoutLog {
   id: string;
-  date: Date;
-  duration?: number;
-  note?: string;
-  createdAt: Date;
+  date: string | Date;
+  duration?: number | null;
+  note?: string | null;
+  createdAt: string | Date;
   exercises: Exercise[];
 }
 
 export interface Exercise {
   id: string;
   name: string;
-  category: "strength" | "cardio" | "mobility" | "custom";
+  category: ExerciseCategory;
   isCustom?: boolean;
   sets: ExerciseSet[];
   aiTagged: boolean;
 }
 
+/** Weight in kg, distance in km, duration in hours. */
 export interface ExerciseSet {
   id: string;
-  reps?: number;
-  weight?: number;
-  distance?: number;
-  duration?: number;
-  intensity?: "easy" | "moderate" | "hard" | "max";
-  note?: string;
+  reps?: number | null;
+  weight?: number | null;
+  distance?: number | null;
+  duration?: number | null;
+  intensity?: Intensity | null;
+  note?: string | null;
 }
 
 export interface Metric {
   id: string;
-  date: Date;
-  weight?: number;
-  bodyFat?: number;
-  muscleMass?: number;
-}
-
-export interface UserStore {
-  // State
-  user: User | null;
-  isLoggedIn: boolean;
-  logs: WorkoutLog[];
-  metrics: Metric[];
-  isLoading: boolean;
-  toProcess: string;
-  isPremium: boolean;
-
-  // Actions
-  setUser: (user: User | null) => void;
-  setToProcess: (transcript: string) => void;
-  setLoggedIn: (isLoggedIn: boolean) => void;
-  fetchLogs: (token?: string) => Promise<void>;
-  fetchMetrics: (token?: string) => Promise<void>;
-  fetchToProcess: (token?: string) => Promise<void>;
-  fetchIsPremium: (token?: string) => Promise<void>;
-  addLog: (log: WorkoutLog) => void;
-  addMetric: (metric: Metric) => void;
-  setLoading: (loading: boolean) => void;
-  clearStore: () => void;
+  date: string | Date;
+  weight?: number | null;
+  bodyFat?: number | null;
+  muscleMass?: number | null;
 }

@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@clerk/clerk-react";
 import {
+  ApiError,
+  errorMessage,
   fetchInsights as apiFetchInsights,
   generateInsights as apiGenerateInsights,
 } from "../lib/api";
@@ -59,8 +61,7 @@ export function useInsights() {
         setCanRegenerateAt(new Date(data.canRegenerateAt));
       }
     } catch (err) {
-      console.error("Error fetching insights:", err);
-      setError("Failed to load insights");
+      setError(errorMessage(err, "Couldn't load insights."));
       setInsights(null);
     } finally {
       setIsLoading(false);
@@ -93,12 +94,13 @@ export function useInsights() {
         setCanRegenerateAt(new Date(data.canRegenerateAt));
       }
     } catch (err: unknown) {
-      console.error("Error generating insights:", err);
-      const errorMessage =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-        (err as Error).message ||
-        "Failed to generate insights";
-      setError(errorMessage);
+      // Generated recently: the button shows when the next run is allowed, so no error is needed.
+      if (err instanceof ApiError && typeof err.problem.canRegenerateAt === "string") {
+        setCanRegenerate(false);
+        setCanRegenerateAt(new Date(err.problem.canRegenerateAt));
+      } else {
+        setError(errorMessage(err, "Couldn't generate insights."));
+      }
     } finally {
       setIsGenerating(false);
     }
