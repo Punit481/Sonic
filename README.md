@@ -87,6 +87,7 @@ Interactive docs run at `http://localhost:8080/swagger-ui` while the backend is 
 | POST | `/api/v1/voice-logs/audio` | Multipart `file` (audio) → transcribed, parsed and saved in one step |
 | GET | `/api/v1/insights/latest` | Latest insights and whether new ones can be generated |
 | POST | `/api/v1/insights` | Generate insights (needs 3+ workouts, once per 24h) |
+| GET | `/api/v1/export/workouts.csv`, `/api/v1/export/body-metrics.csv` | All your data as CSV, weights in your unit, dates in `?timeZone` |
 | GET | `/actuator/health` | Health check (no auth) |
 
 Units: weights in kg, distances in km, durations in hours. Exercise names are stored in one canonical spelling (`bench` → `Bench Press`), so records and charts don't split. The `weightUnit` preference only changes display and what the AI assumes when no unit is said. Voice and insight endpoints are limited to 30 AI calls per user per hour by default.
@@ -134,6 +135,34 @@ npm run dev
 ```
 
 Open `http://localhost:5173`.
+
+### Day to day: one command
+
+After the first-time setup above, start everything with:
+
+```bash
+./dev.sh
+```
+
+It starts Docker if needed, checks your `.env` files, starts the database, backs it up once a day, runs the backend and frontend with labelled output (`api │`, `web │`), and opens http://localhost:5173. `Ctrl + C` stops everything.
+
+## Your data: backups and export
+
+Your data lives in a Docker volume on this machine, so keep backups.
+
+```bash
+scripts/backup.sh                 # back up now (dev.sh also does this once a day)
+scripts/restore.sh                # restore the newest backup (asks first, saves a safety backup)
+scripts/restore.sh <file>         # restore a specific backup
+```
+
+Backups are compressed SQL files in `~/Sonic-backups`; the newest 30 are kept. To keep copies off this machine, point them at a synced folder, for example in `~/.zshrc`:
+
+```bash
+export SONIC_BACKUP_DIR="$HOME/Library/Mobile Documents/com~apple~CloudDocs/Sonic-backups"
+```
+
+To get your data into a spreadsheet, use **Export CSV** on the History page (workouts, one row per set, or body measurements), or `GET /api/v1/export/workouts.csv` and `/api/v1/export/body-metrics.csv`.
 
 ## Deployment
 

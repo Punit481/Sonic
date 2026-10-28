@@ -8,6 +8,7 @@ import WorkoutEditor from "../components/WorkoutEditor";
 import {
   deleteBodyMetric,
   deleteWorkout,
+  downloadExport,
   errorMessage,
   updateWorkout,
   type DraftWorkout,
@@ -228,6 +229,7 @@ export default function HistoryPage() {
   const exerciseNames = useMemo(() => exerciseSummaries(logs).map((e) => e.name), [logs]);
   const [tab, setTab] = useState<"workouts" | "body">("workouts");
   const [error, setError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
   const { hash } = useLocation();
   const target = hash.slice(1);
 
@@ -253,15 +255,36 @@ export default function HistoryPage() {
           <p className="eyebrow">History</p>
           <h1 className="mt-2 font-display text-3xl font-bold tracking-tight sm:text-4xl">Everything you've logged</h1>
         </div>
-        <Segmented
-          label="History type"
-          value={tab}
-          onChange={setTab}
-          options={[
-            { value: "workouts", label: `Workouts · ${logs.length}` },
-            { value: "body", label: `Body · ${metrics.length}` },
-          ]}
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            variant="ghost"
+            icon="download"
+            disabled={exporting || (tab === "workouts" ? logs.length === 0 : metrics.length === 0)}
+            onClick={async () => {
+              setExporting(true);
+              setError(null);
+              try {
+                await downloadExport(await getToken(), tab === "workouts" ? "workouts" : "body-metrics");
+              } catch (e) {
+                setError(errorMessage(e));
+              } finally {
+                setExporting(false);
+              }
+            }}
+          >
+            {exporting ? "Exporting…" : "Export CSV"}
+          </Button>
+          <Segmented
+            label="History type"
+            value={tab}
+            onChange={setTab}
+            options={[
+              { value: "workouts", label: `Workouts · ${logs.length}` },
+              { value: "body", label: `Body · ${metrics.length}` },
+            ]}
+          />
+        </div>
       </header>
 
       {error && <Banner onDismiss={() => setError(null)}>{error}</Banner>}

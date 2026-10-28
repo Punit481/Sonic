@@ -221,6 +221,23 @@ export const updateWorkout = (token: string | null | undefined, id: string, work
 
 export const fetchExercises = (token?: string | null) => request<ExerciseStats[]>("/api/v1/exercises", token);
 
+/** Downloads a CSV export (all history, not just what's loaded) as a file. */
+export const downloadExport = async (token: string | null | undefined, kind: "workouts" | "body-metrics") => {
+  const url = createApiUrl(`/api/v1/export/${kind}.csv?timeZone=${encodeURIComponent(userTimeZone())}`);
+  const response = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  if (!response.ok) {
+    const problem = await response.json().catch(() => ({ status: response.status }));
+    throw new ApiError({ ...problem, status: response.status });
+  }
+  const filename =
+    /filename="([^"]+)"/.exec(response.headers.get("Content-Disposition") ?? "")?.[1] ?? `sonic-${kind}.csv`;
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(await response.blob());
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(link.href);
+};
+
 export const fetchInsights = (token?: string | null) =>
   request<InsightStatus>("/api/v1/insights/latest", token);
 

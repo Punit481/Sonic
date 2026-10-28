@@ -17,6 +17,7 @@ The integration tests start the whole application against a real PostgreSQL in D
 | `voice/AiSchemaTest` | The JSON schema given to the model keeps unsaid values optional, so the model can't be forced to invent them |
 | `voice/VoiceReviewApiTest` | Parse returns an unsaved draft; confirm saves the edited version with canonical names; past-day workouts are dated that day; the AI gets the user's unit and exercise names; "5 sets of 5" written once is expanded |
 | `workout/RecordsApiTest` | Weight, estimated 1-rep max and bodyweight-rep records (none on the first session); all-time bests per exercise; editing a workout, and only your own |
+| `export/ExportApiTest` | CSV rows per set in the user's unit and time zone, safe quoting of notes, only your own data |
 | `common/AiErrorsTest` | Rate limits and rejected keys get their own problem types |
 | `insight/InsightApiTest` | 3-workout minimum, SQL aggregates (volume, cardio, top exercises, 90-day window, weight change), 24h cooldown with `Retry-After`, same-day sessions, rejecting incomplete model output |
 
